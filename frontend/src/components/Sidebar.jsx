@@ -1,9 +1,10 @@
-import { Activity, Scissors, Wind, History, Bell } from 'lucide-react'
+import { Activity, Scissors, Wind, SlidersHorizontal, History, Bell } from 'lucide-react'
 
 const nav = [
   { id: 'dashboard', label: 'Dashboard', icon: Activity },
   { id: 'pemotong',  label: 'Pemotong',  icon: Scissors },
   { id: 'pengering', label: 'Pengering', icon: Wind },
+  { id: 'settings',  label: 'Pengaturan', icon: SlidersHorizontal },
   { id: 'history',   label: 'Riwayat',   icon: History },
   { id: 'alerts',    label: 'Alert',     icon: Bell },
 ]

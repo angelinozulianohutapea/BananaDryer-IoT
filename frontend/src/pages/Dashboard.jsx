@@ -12,8 +12,6 @@ const STATE_COLOR = {
   SERVO_WAIT: '#3b82f6',
 }
 
-const CYCLE_PRESETS = [5, 10, 15, 20]
-
 // State yang termasuk fase "memotong" — progress di fase ini cuma merepresentasikan
 // rasio siklus pemotongan (current/total), BUKAN progress keseluruhan proses.
 // Fase mengering (DRYING) baru progress berbasis waktu yang sebenarnya.
@@ -31,23 +29,28 @@ function getActuatorStatus(state, heater) {
   }
 }
 
+const STATE_LABEL = {
+  IDLE: 'Sistem siaga (IDLE)',
+  SERVO_OPENING: 'Servo membuka',
+  SLICING_FORWARD: 'Pemotongan berlangsung — pendorong & pisau aktif',
+  SLICING_RETURN: 'Pendorong mundur',
+  SERVO_WAIT: 'Menunggu irisan masuk',
+  SERVO_CLOSING: 'Servo menutup',
+  DRYING: 'Sistem BananaDryer aktif, heater menyala',
+  FINISHED: 'Siklus selesai, target tercapai',
+  ERROR: 'Terjadi error pada sistem',
+}
+
 export default function Dashboard() {
   const { connected, sensorData, machineState, heartbeat, alerts } = useSocket()
   const [chartData, setChartData] = useState([])
-  const [cycles, setCycles] = useState(10)
   const [cmdLoading, setCmdLoading] = useState(false)
   const [machineInfo, setMachineInfo] = useState(null)
   const [stateLog, setStateLog] = useState([])
   const prevStateRef = useRef(null)
 
-  // ── Sumber state yang dipakai untuk tampilan ──────────────────────
-  // machineState (dari topic MQTT "state") cuma dikirim SEKALI tiap transisi —
-  // kalau paket itu hilang/korup di jalur UART Nano↔ESP32, dashboard akan
-  // macet di state lama tanpa pernah tahu state sudah berubah.
-  // sensorData.state (dari topic "data") jauh lebih reliable karena dikirim
-  // berkala tiap beberapa detik selama proses berjalan — jadi state di sini
-  // "menyegarkan diri" sendiri walau ada satu-dua paket yang drop.
-  // Maka sensorData.state dipakai sebagai sumber utama, machineState cuma fallback.
+  // sensorData.state dipakai sebagai sumber utama (lihat catatan versi sebelumnya):
+  // lebih reliable daripada machineState karena dikirim berkala, bukan sekali per transisi.
   const effectiveState = sensorData?.state || machineState
 
   // Load status awal
@@ -69,8 +72,6 @@ export default function Dashboard() {
   }, [sensorData])
 
   // Catat perubahan state ke log lokal (realtime, sesi berjalan ini)
-  // Pakai effectiveState supaya transisi yang cuma kelihatan lewat sensorData
-  // (karena event machine:state-nya hilang) tetap tercatat di log.
   useEffect(() => {
     if (!effectiveState || effectiveState === prevStateRef.current) return
     prevStateRef.current = effectiveState
@@ -114,7 +115,7 @@ export default function Dashboard() {
       <div className="page-header">
         <div>
           <h1 className="page-title">BananaDryer01</h1>
-          <p className="page-subtitle">Monitoring &amp; Control Realtime</p>
+          <p className="page-subtitle">Ringkasan Monitoring Realtime — detail kontrol ada di halaman Pemotong &amp; Pengering</p>
         </div>
         <div className="status-badge" style={{ background: stateColor + '22', color: stateColor, border: `1px solid ${stateColor}` }}>
           <span className="status-dot" style={{ background: stateColor }} />
@@ -139,7 +140,7 @@ export default function Dashboard() {
           icon={<Cpu size={20}/>} color="#f59e0b" />
       </div>
 
-      {/* Status Komponen */}
+      {/* Status Komponen — read-only, kontrol manual ada di halaman Pemotong/Pengering */}
       <div className="card">
         <div className="card-title">Status Komponen</div>
         <div className="component-grid">
@@ -147,6 +148,7 @@ export default function Dashboard() {
           <ComponentStatus icon={<Scissors size={20}/>} label="Pemotong" desc="Pisau iris otomatis" on={actuators.pemotong} />
           <ComponentStatus icon={<ArrowRightLeft size={20}/>} label="Pendorong" desc="Motor pendorong bahan" on={actuators.pendorong} />
         </div>
+        <p className="dashboard-hint">Untuk kontrol manual per-komponen, buka halaman <b>Pemotong</b> atau <b>Pengering</b>.</p>
       </div>
 
       {/* Progress Bar */}
@@ -212,52 +214,18 @@ export default function Dashboard() {
         }
       </div>
 
-      {/* Panel Kontrol */}
+      {/* Aksi Darurat Global — START/STOP/RESET tetap di sini biar operator bisa
+          langsung hentikan mesin dari halaman manapun tanpa navigasi.
+          Panel pengaturan JUMLAH SIKLUS dipindah sepenuhnya ke halaman Pemotong,
+          supaya cuma ada 1 tempat buat setting itu (hindari duplikasi/salah setting). */}
       <div className="card">
-        <div className="card-title">Panel Kontrol — Target Siklus</div>
-        <div className="cycle-presets">
-          {CYCLE_PRESETS.map(n => (
-            <button
-              key={n}
-              className={`preset-btn ${cycles === n ? 'preset-btn-active' : ''}`}
-              onClick={() => setCycles(n)}
-            >
-              {n}
-            </button>
-          ))}
-        </div>
-        <div className="cycles-row">
-          <label className="cycles-label">Jumlah Siklus:</label>
-          <div className="stepper">
-            <button
-              type="button" className="stepper-btn"
-              disabled={cmdLoading || cycles <= 1}
-              onClick={() => setCycles(c => Math.max(1, c - 1))}
-            >−</button>
-            <input
-              type="number" min={1} max={99}
-              value={cycles}
-              onChange={e => setCycles(Math.min(99, Math.max(1, parseInt(e.target.value) || 1)))}
-              className="cycles-input"
-            />
-            <button
-              type="button" className="stepper-btn"
-              disabled={cmdLoading || cycles >= 99}
-              onClick={() => setCycles(c => Math.min(99, c + 1))}
-            >+</button>
-          </div>
-          <button className="btn btn-blue" disabled={cmdLoading} onClick={() => sendCmd('CYCLES', cycles)}>Set Siklus</button>
-        </div>
-      </div>
-
-      {/* Aksi Mesin */}
-      <div className="card">
-        <div className="card-title">Aksi Mesin</div>
+        <div className="card-title">Aksi Mesin (Darurat / Global)</div>
         <div className="control-row">
-          <button className="btn btn-green"  disabled={cmdLoading} onClick={() => sendCmd('START')}>▶ Mulai Pengeringan</button>
+          <button className="btn btn-green"  disabled={cmdLoading} onClick={() => sendCmd('START')}>▶ Mulai (pakai siklus terakhir)</button>
           <button className="btn btn-red"    disabled={cmdLoading} onClick={() => sendCmd('STOP')}>⏹ Hentikan</button>
           <button className="btn btn-yellow" disabled={cmdLoading} onClick={() => sendCmd('RESET')}>↺ Reset Sistem</button>
         </div>
+        <p className="dashboard-hint">Untuk mengatur jumlah siklus pemotongan, buka halaman <b>Pemotong</b>.</p>
       </div>
 
       {/* Log Aktivitas */}
@@ -296,18 +264,6 @@ export default function Dashboard() {
       )}
     </div>
   )
-}
-
-const STATE_LABEL = {
-  IDLE: 'Sistem siaga (IDLE)',
-  SERVO_OPENING: 'Servo membuka',
-  SLICING_FORWARD: 'Pemotongan berlangsung — pendorong & pisau aktif',
-  SLICING_RETURN: 'Pendorong mundur',
-  SERVO_WAIT: 'Menunggu irisan masuk',
-  SERVO_CLOSING: 'Servo menutup',
-  DRYING: 'Sistem BananaDryer aktif, heater menyala',
-  FINISHED: 'Siklus selesai, target tercapai',
-  ERROR: 'Terjadi error pada sistem',
 }
 
 function ComponentStatus({ icon, label, desc, on }) {

@@ -487,7 +487,7 @@ void manualPusherStart(bool forward) {
   manualPusherPulHigh = false;
   manualPusherLastUs  = micros();
   manualPusherActive  = true;
-  Serial.println(forward ? "$MANUAL:PUSHER_FWD" : "$MANUAL:PUSHER_REV");
+  Serial.println(forward ? "$MANUAL:PUSHER_FORWARD" : "$MANUAL:PUSHER_REVERSE");
 }
 
 void manualPusherStop() {
@@ -662,20 +662,20 @@ void readUART() {
     }
 
     // ---- PUSHER manual ----
-    else if (cmd == "PUSHER:FWD") {
+    else if (cmd == "PUSHER:FORWARD") {
       if (currentState != STATE_IDLE || manualCutterActive) {
         Serial.println("$ERROR:BUSY");
       } else {
         manualPusherStart(true);
-        Serial.println("$ACK:PUSHER_FWD");
+        Serial.println("$ACK:PUSHER_FORWARD");
       }
     }
-    else if (cmd == "PUSHER:REV") {
+    else if (cmd == "PUSHER:REVERSE") {
       if (currentState != STATE_IDLE || manualCutterActive) {
         Serial.println("$ERROR:BUSY");
       } else {
         manualPusherStart(false);
-        Serial.println("$ACK:PUSHER_REV");
+        Serial.println("$ACK:PUSHER_REVERSE");
       }
     }
     else if (cmd == "PUSHER:STOP") {
