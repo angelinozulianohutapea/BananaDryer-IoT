@@ -257,6 +257,10 @@ void sendData() {
   Serial.print(lastHum, 1);
   Serial.print(",HEATER=");
   Serial.print(heaterState ? "ON" : "OFF");
+  Serial.print(",CUTTER=");
+  Serial.print(manualCutterActive ? "ON" : "OFF");
+  Serial.print(",PUSHER=");
+  Serial.print(manualPusherActive ? "ON" : "OFF");
   Serial.print(",CYCLE=");
   Serial.print(currentCycle);
   Serial.print(",TOTAL=");
