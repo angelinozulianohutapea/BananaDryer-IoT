@@ -352,6 +352,19 @@ body { background: var(--bg); color: var(--text); }
   padding: 12px; background: #fafbfd; border-radius: 10px;
 }
 
+/* ── Slot foto 4 kolom (buat dokumentasi mesin) ── */
+.photo-grid-caption { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin: 16px 0 10px; }
+.photo-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.photo-slot {
+  aspect-ratio: 1 / 1; border: 2px dashed var(--border); border-radius: 10px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  color: var(--muted); background: #fafbfd; font-size: 12px; font-weight: 600;
+  transition: border-color 0.15s, color 0.15s;
+}
+.photo-slot:hover { border-color: #f59e0b; color: #b45309; }
+@media (max-width: 640px) { .photo-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 420px) { .photo-grid { grid-template-columns: 1fr; } }
+
 /* ── Mode switch (Auto/Manual) ── */
 .mode-switch { display: flex; gap: 10px; }
 .mode-btn {
@@ -548,6 +561,13 @@ body { background: var(--bg); color: var(--text); }
 }
 .dash-timeline-time { font-size: 11px; color: var(--muted); }
 .dash-timeline-msg { font-size: 13px; color: var(--text); margin-top: 2px; line-height: 1.4; }
+
+/* Foto Dokumentasi Mesin — panel penuh 12 kolom, isi 4 slot foto berdampingan */
+.dash-photos {
+  grid-column: span 12;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+  padding: 20px;
+}
 
 @media (max-width: 900px) {
   .dash-hero, .dash-health, .dash-summary, .dash-activity, .dash-shortcuts-row { grid-column: span 12; }

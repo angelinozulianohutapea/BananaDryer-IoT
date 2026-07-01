@@ -1,8 +1,27 @@
+import { useRef, useState, useEffect } from 'react'
+
 // Chart garis dibangun pakai SVG murni (bukan recharts) — supaya sumbu, angka,
 // dan garis ideal PASTI kelihatan, gak gantung ke behavior library chart pihak ketiga.
+// Lebar SVG diukur langsung dari elemen pembungkus pakai ResizeObserver (bukan di-scale
+// lewat viewBox/CSS), jadi selalu pas memenuhi lebar card tanpa ruang kosong kiri-kanan,
+// tanpa bikin tinggi ikut membengkak, dan teks/lingkaran gak gepeng/distorsi.
 // data: [{ time, ...dataKeys }], lines: [{ dataKey, name, color }]
 // idealLine: { value, label, color } — garis acuan ideal yang selalu tampil, bahkan sebelum ada data.
 export default function DualLineChart({ data, lines, domain, ticks, unit = '%', idealLine }) {
+  const containerRef = useRef(null)
+  const [measuredWidth, setMeasuredWidth] = useState(600)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect?.width
+      if (w) setMeasuredWidth(Math.max(280, Math.round(w)))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
   const hasData = data && data.length > 0
   const points  = hasData ? data : []
 
@@ -10,8 +29,8 @@ export default function DualLineChart({ data, lines, domain, ticks, unit = '%', 
   const yTicks  = ticks  || [0, 25, 50, 75, 100]
   const [yMin, yMax] = yDomain
 
-  // Ukuran & padding kanvas (viewBox tetap, scale otomatis lewat width 100%)
-  const W = 600, H = 220
+  // W = lebar asli card (piksel), H = tinggi tetap (gak ikut membengkak walau card lebar)
+  const W = measuredWidth, H = 220
   const padL = 42, padR = 16, padT = 14, padB = 28
   const plotW = W - padL - padR
   const plotH = H - padT - padB
@@ -24,8 +43,8 @@ export default function DualLineChart({ data, lines, domain, ticks, unit = '%', 
   const labelStep = n > 6 ? Math.ceil(n / 6) : 1
 
   return (
-    <div style={{ width: '100%', minWidth: 0 }}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} style={{ display: 'block' }}>
+    <div ref={containerRef} style={{ width: '100%', minWidth: 0 }}>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
         {/* Grid horizontal + label angka sumbu-Y */}
         {yTicks.map(t => (
           <g key={t}>

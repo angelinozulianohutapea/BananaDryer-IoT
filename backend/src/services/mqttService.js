@@ -55,6 +55,8 @@ async function handleData(p) {
     const cycTot   = parseInt(p.total ?? p.cycle_total)   || null;
     const state    = p.state  || null;
     const heater   = p.heater || null;
+    const cutter   = p.cutter || null;
+    const pusher   = p.pusher || null;
     const recAt    = p.ts ? new Date(p.ts) : new Date();
 
     await pool.query(
@@ -92,6 +94,8 @@ async function handleData(p) {
       cycle_total:   cycTot,
       state,
       heater,
+      cutter,
+      pusher,
       ts: recAt,
     });
 

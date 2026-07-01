@@ -30,9 +30,15 @@ export default function Pemotong() {
   const cycleTotal     = sensorData?.cycle_total   ?? sensorData?.total ?? 0
   const stateColor     = STATE_COLOR[effectiveState] || '#6b7280'
 
-  // Status aktuator (dari state mesin, karena firmware belum kirim field ON/OFF terpisah)
+  // Status aktuator — gabungan dari 2 sumber:
+  //  1) State siklus otomatis (SLICING_FORWARD/RETURN) → saat mode AUTO jalan
+  //  2) Field cutter/pusher asli dari firmware (via $DATA) → saat mode MANUAL
+  //     (Nano sekarang mengirim status relay manual secara real-time, jadi
+  //      indikator ON/OFF & tombol OFF selalu sesuai kondisi asli mesin.)
   const pendorongOn = effectiveState === 'SLICING_FORWARD' || effectiveState === 'SLICING_RETURN'
+                       || sensorData?.pusher === 'ON'
   const pemotongOn  = effectiveState === 'SLICING_FORWARD'
+                       || sensorData?.cutter === 'ON'
 
   // Perkiraan "kecepatan" motor buat speedometer — selama fase memotong dianggap
   // berjalan penuh (100%), di luar itu 0%. Kalau nanti firmware kirim RPM asli,

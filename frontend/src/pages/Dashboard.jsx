@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   RotateCcw, Flame, Scissors, ArrowRightLeft,
-  Settings as SettingsIcon, History as HistoryIcon, Bell, Clock, ListChecks, Wifi, Cpu,
+  Settings as SettingsIcon, History as HistoryIcon, Bell, Clock, ListChecks, Wifi, Cpu, Image as ImageIcon,
 } from 'lucide-react'
 import useSocket from '../hooks/useSocket'
 import { sendCommand, getSessions, getSettings, getAlerts } from '../hooks/api'
@@ -256,6 +256,20 @@ export default function Dashboard({ onNavigate }) {
                 ))}
               </div>
           }
+        </div>
+
+        {/* Foto Dokumentasi Mesin — slot 4 kolom, konsisten sama Pemotong & Pengering.
+            Tinggal ganti isi tiap .photo-slot dengan <img src="..." alt="..." /> */}
+        <div className="dash-photos">
+          <div className="dash-panel-title"><ImageIcon size={14} /> Foto Dokumentasi Mesin</div>
+          <div className="photo-grid">
+            {[1, 2, 3, 4].map(i => (
+              <div className="photo-slot" key={i}>
+                <ImageIcon size={22} strokeWidth={1.5} />
+                <span>Foto {i}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import { Flame, Thermometer, Droplets, Clock, CheckCircle2 } from 'lucide-react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { Flame, Thermometer, Droplets, Clock, CheckCircle2, Image as ImageIcon } from 'lucide-react'
 import useSocket from '../hooks/useSocket'
 import { sendCommand, controlHeater, getSettings } from '../hooks/api'
 import ManualControl from '../components/ManualControl'
@@ -14,6 +14,48 @@ function fmtDuration(sec) {
   const h = Math.floor(sec / 3600)
   const m = Math.floor((sec % 3600) / 60)
   return h > 0 ? `${h}j ${m}m` : `${m}m`
+}
+
+// Kurva referensi "1 siklus ideal" — dibangun dari setpoint di Pengaturan, dipakai
+// sebagai garis putus-putus di chart supaya dari awal (sebelum ada data real) sudah
+// kelihatan gambaran bentuk siklus yang diharapkan: suhu naik saat pemanasan awal lalu
+// netap (naik-turun kecil, karena heater nyala-mati menjaga rentang target); kelembaban
+// turun terus melandai sampai ke batas target.
+// Titik dibuat per 5% progres siklus (0–100%), dipakai bareng field `pct` di titik data real
+// biar garis aktual & garis ideal sejajar di sumbu-X yang sama (persen siklus, bukan waktu jam).
+function buildIdealTempCurve(settings) {
+  const min = settings?.target_temp_min ?? 60
+  const max = settings?.target_temp_max ?? 70
+  const mid = (min + max) / 2
+  const amp = Math.max((max - min) / 2 - 0.5, 1) // riak kecil di dalam rentang target (heater nyala-mati)
+  const start = Math.max(28, min - 20) // suhu awal (ruangan) sebelum heater memanaskan
+  const rampEndPct = 12 // 0–12% siklus dipakai buat pemanasan awal sampai masuk rentang target
+
+  const points = []
+  for (let pct = 0; pct <= 100; pct += 5) {
+    let value
+    if (pct <= rampEndPct) {
+      value = start + (mid - start) * (pct / rampEndPct)
+    } else {
+      const wave = Math.sin(((pct - rampEndPct) / (100 - rampEndPct)) * Math.PI * 5)
+      value = mid + wave * amp
+    }
+    points.push({ pct, value: Math.round(value * 10) / 10 })
+  }
+  return points
+}
+
+function buildIdealHumCurve(settings) {
+  const targetMax = settings?.target_humidity_max ?? 15
+  const start = 90 // kelembaban awal pisang basah sebelum dikeringkan
+
+  const points = []
+  for (let pct = 0; pct <= 100; pct += 5) {
+    // turun melandai (eksponensial) — cepat di awal, makin lambat mendekati target
+    const value = targetMax + (start - targetMax) * Math.exp(-pct / 30)
+    points.push({ pct, value: Math.round(value * 10) / 10 })
+  }
+  return points
 }
 
 export default function Pengering() {
@@ -36,13 +78,24 @@ export default function Pengering() {
     getSettings().then(r => setSettings(r.data?.data)).catch(() => {})
   }, [])
 
+  // Kurva ideal 1 siklus penuh — dihitung ulang tiap setpoint di Pengaturan berubah.
+  // Dipakai sebagai garis referensi (selalu tampil, bahkan sebelum ada data real).
+  const idealTempCurve = useMemo(() => buildIdealTempCurve(settings), [settings])
+  const idealHumCurve  = useMemo(() => buildIdealHumCurve(settings), [settings])
+
   // Tambah data chart
   useEffect(() => {
     if (!sensorData) return
+    const estSec = settings ? settings.estimated_duration_min * 60 : null
+    const elapsed = startedAtRef.current ? (Date.now() - startedAtRef.current) / 1000 : 0
+    // pct = posisi titik ini di sumbu-X yang sama dengan kurva ideal (0–100% siklus),
+    // biar garis aktual & garis ideal bisa langsung dibandingkan sejajar.
+    const pct = isDrying && estSec ? Math.min(100, (elapsed / estSec) * 100) : null
     const point = {
       time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
       temp: sensorData.temperature,
       hum:  sensorData.humidity,
+      pct,
     }
     setChartData(prev => [...prev.slice(-39), point])
   }, [sensorData])
@@ -118,11 +171,18 @@ export default function Pengering() {
         </div>
       )}
 
-      {/* Ilustrasi mesin pengering */}
+      {/* Dokumentasi Mesin — 4 slot foto berdampingan.
+          Tinggal ganti isi tiap .photo-slot dengan <img src="..." alt="..." /> untuk
+          menampilkan foto asli mesin pengering di sini. */}
       <div className="card">
-        <div className="card-title">Skema Mesin Pengering</div>
-        <div className="machine-illustration">
-          <DryerIllustration heaterOn={heaterOn} temp={sensorData?.temperature} />
+        <div className="card-title">Dokumentasi Mesin Pengering</div>
+        <div className="photo-grid">
+          {[1, 2, 3, 4].map(i => (
+            <div className="photo-slot" key={i}>
+              <ImageIcon size={22} strokeWidth={1.5} />
+              <span>Foto {i}</span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -196,6 +256,7 @@ export default function Pengering() {
           data={chartData} dataKey="temp" name="Suhu (°C)" color="#ef4444" unit="°C"
           idealMin={settings?.target_temp_min} idealMax={settings?.target_temp_max}
           domain={[30, 90]}
+          idealCurve={idealTempCurve}
         />
       </div>
 
@@ -206,6 +267,7 @@ export default function Pengering() {
           data={chartData} dataKey="hum" name="Kelembaban (%)" color="#3b82f6" unit="%"
           idealMin={0} idealMax={settings?.target_humidity_max}
           domain={[0, 100]}
+          idealCurve={idealHumCurve}
         />
       </div>
 
@@ -230,43 +292,5 @@ export default function Pengering() {
         </div>
       )}
     </div>
-  )
-}
-
-function DryerIllustration({ heaterOn, temp }) {
-  return (
-    <svg viewBox="0 0 400 160" width="100%" height="160">
-      <rect x="60" y="20" width="280" height="120" rx="10" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="2" />
-      {/* Rak-rak pengering */}
-      {[0, 1, 2].map(i => (
-        <line key={i} x1="75" y1={45 + i * 30} x2="325" y2={45 + i * 30} stroke="#cbd5e1" strokeWidth="2" />
-      ))}
-      {/* Elemen heater di bawah */}
-      <rect x="75" y="125" width="250" height="8" rx="4" fill={heaterOn ? '#f59e0b' : '#cbd5e1'}>
-        {heaterOn && (
-          <animate attributeName="opacity" values="1;0.4;1" dur="0.8s" repeatCount="indefinite" />
-        )}
-      </rect>
-      <text x="200" y="150" textAnchor="middle" fontSize="11" fill="#64748b">
-        Heater {heaterOn ? '(ON)' : '(OFF)'} {temp !== undefined && temp !== null ? `· ${temp.toFixed(1)}°C` : ''}
-      </text>
-      {/* Uap kalau heater nyala */}
-      {heaterOn && (
-        <>
-          <circle cx="150" cy="30" r="3" fill="#94a3b8" opacity="0.6">
-            <animate attributeName="cy" values="30;5;30" dur="2s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0.6;0;0.6" dur="2s" repeatCount="indefinite" />
-          </circle>
-          <circle cx="200" cy="30" r="3" fill="#94a3b8" opacity="0.6">
-            <animate attributeName="cy" values="30;5;30" dur="2.4s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0.6;0;0.6" dur="2.4s" repeatCount="indefinite" />
-          </circle>
-          <circle cx="250" cy="30" r="3" fill="#94a3b8" opacity="0.6">
-            <animate attributeName="cy" values="30;5;30" dur="1.8s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0.6;0;0.6" dur="1.8s" repeatCount="indefinite" />
-          </circle>
-        </>
-      )}
-    </svg>
   )
 }

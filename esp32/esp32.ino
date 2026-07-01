@@ -50,8 +50,8 @@
 // ============================================================
 
 // WiFi
-#define WIFI_SSID        "ESP32L"
-#define WIFI_PASSWORD    "12345678"
+#define WIFI_SSID        "ESP32LL"
+#define WIFI_PASSWORD    "123456789"
 
 // MQTT Broker (HiveMQ Cloud free tier)
 #define MQTT_HOST "d1b37a26c1fc403090006f2f46c45938.s1.eu.hivemq.cloud"
@@ -338,6 +338,8 @@ void parseDataLine(const char* val) {
   float tempVal       = 0.0f;
   float humVal        = 0.0f;
   char  heaterVal[8]  = "";
+  char  cutterVal[8]  = "";
+  char  pusherVal[8]  = "";
   int   cycleVal      = 0;
   int   totalVal      = 0;
   int   progressVal   = 0;
@@ -357,6 +359,8 @@ void parseDataLine(const char* val) {
       else if (strcmp(key, "TEMP")     == 0) tempVal     = atof(v);
       else if (strcmp(key, "HUM")      == 0) humVal      = atof(v);
       else if (strcmp(key, "HEATER")   == 0) strncpy(heaterVal, v, sizeof(heaterVal) - 1);
+      else if (strcmp(key, "CUTTER")   == 0) strncpy(cutterVal, v, sizeof(cutterVal) - 1);
+      else if (strcmp(key, "PUSHER")   == 0) strncpy(pusherVal, v, sizeof(pusherVal) - 1);
       else if (strcmp(key, "CYCLE")    == 0) cycleVal    = atoi(v);
       else if (strcmp(key, "TOTAL")    == 0) totalVal    = atoi(v);
       else if (strcmp(key, "PROGRESS") == 0) progressVal = atoi(v);
@@ -379,6 +383,8 @@ void parseDataLine(const char* val) {
     "\"temperature\":%.1f,"
     "\"humidity\":%.1f,"
     "\"heater\":\"%s\","
+    "\"cutter\":\"%s\","
+    "\"pusher\":\"%s\","
     "\"cycle\":%d,"
     "\"total\":%d,"
     "\"progress\":%d,"
@@ -387,7 +393,7 @@ void parseDataLine(const char* val) {
     "\"uptime\":%d,"
     "\"ts\":\"%s\"}",
     MACHINE_ID,
-    stateVal, tempVal, humVal, heaterVal,
+    stateVal, tempVal, humVal, heaterVal, cutterVal, pusherVal,
     cycleVal, totalVal, progressVal,
     elapsedVal, remainVal, uptimeVal, ts);
 
