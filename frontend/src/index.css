@@ -215,6 +215,22 @@ body { background: var(--bg); color: var(--text); }
 /* ── States ── */
 .loading, .empty { color: var(--muted); text-align: center; padding: 48px; font-size: 14px; }
 
+/* ── Row of side-by-side chart cards ── */
+.chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+.chart-row .card { min-width: 0; }
+
+/* ── Keterangan warna chart: ideal vs aktual ── */
+.chart-legend-hint {
+  display: flex; flex-wrap: wrap; gap: 14px;
+  margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border);
+  font-size: 12px; color: var(--muted);
+}
+.chart-legend-hint-item { display: flex; align-items: center; gap: 6px; }
+.chart-legend-swatch { width: 16px; height: 3px; border-radius: 2px; display: inline-block; }
+.chart-legend-swatch-dash {
+  background: none; height: 0; border-top: 2px dashed;
+}
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
   .sidebar { display: none; }
@@ -226,6 +242,7 @@ body { background: var(--bg); color: var(--text); }
   .cycle-presets { flex-wrap: wrap; }
   .control-row { gap: 10px; }
   .cycles-row { flex-wrap: wrap; }
+  .chart-row { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 420px) {
@@ -233,7 +250,7 @@ body { background: var(--bg); color: var(--text); }
 }
 
 /* ── Status Komponen ── */
-.component-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.component-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
 .component-card {
   background: var(--bg); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 18px;
@@ -352,17 +369,42 @@ body { background: var(--bg); color: var(--text); }
 .mode-btn-active:hover { color: #fff; }
 
 /* ── Manual control toggle buttons ── */
-.manual-toggle-row { display: flex; gap: 8px; margin-top: 10px; }
+.manual-toggle-row { display: flex; gap: 10px; margin-top: 12px; width: 100%; }
 .btn-toggle {
-  flex: 1; padding: 9px 0; border-radius: 8px; border: 1.5px solid var(--border);
-  background: var(--surface); font-size: 13px; font-weight: 700; cursor: pointer;
+  flex: 1; padding: 13px 0; border-radius: 12px; border: 1.5px solid var(--border);
+  background: var(--surface); font-size: 14px; font-weight: 800; letter-spacing: .4px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 7px;
   transition: all .15s ease;
 }
-.btn-toggle:disabled { opacity: .4; cursor: not-allowed; }
-.btn-toggle-on:not(:disabled)  { color: var(--green); border-color: var(--green); }
-.btn-toggle-on:not(:disabled):hover  { background: #10b9811a; }
-.btn-toggle-off:not(:disabled) { color: var(--red); border-color: var(--red); }
-.btn-toggle-off:not(:disabled):hover { background: #ef44441a; }
+.btn-toggle:disabled {
+  cursor: not-allowed;
+  opacity: 1;
+  background: #eef1f6;
+  color: #94a3b8;
+  border-color: #dbe3ee;
+}
+.btn-toggle-on:not(:disabled) {
+  background: linear-gradient(135deg, #34d399, #10b981);
+  border-color: #10b981;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(16, 185, 129, 0.35);
+}
+.btn-toggle-on:not(:disabled):hover  {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(16, 185, 129, 0.45);
+}
+.btn-toggle-on:not(:disabled):active { transform: translateY(0); }
+.btn-toggle-off:not(:disabled) {
+  background: linear-gradient(135deg, #f87171, #ef4444);
+  border-color: #ef4444;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(239, 68, 68, 0.35);
+}
+.btn-toggle-off:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(239, 68, 68, 0.45);
+}
+.btn-toggle-off:not(:disabled):active { transform: translateY(0); }
 .manual-disabled-hint { font-size: 11px; color: var(--muted); margin-top: 8px; font-style: italic; }
 .manual-warning { font-size: 13px; color: var(--muted); line-height: 1.6; }
 .dashboard-hint { font-size: 12px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
@@ -555,7 +597,7 @@ body { background: var(--bg); color: var(--text); }
 .summary-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
 /* ── Speedometer row ── */
-.speedometer-row { display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; }
+.speedometer-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; justify-items: center; }
 .speedometer { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .speedometer-label { font-size: 12px; font-weight: 600; color: var(--muted); }
 

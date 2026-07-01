@@ -1,15 +1,18 @@
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ReferenceArea, ResponsiveContainer } from 'recharts'
 
+// Placeholder timeline dipakai selagi belum ada data real, biar chart gak kosong polos —
+// pita ideal & sumbu tetap kelihatan dari awal, tinggal nunggu garis data real menyusul.
+const PLACEHOLDER_POINTS = Array.from({ length: 8 }, () => ({ time: '' }))
+
 // Chart suhu/kelembaban dengan area hijau transparan sebagai band "ideal"
 // data: [{ time, value }], idealMin/idealMax: batas band ideal
 export default function ChartWithIdealBand({ data, dataKey, name, color, unit, idealMin, idealMax, domain }) {
-  if (!data || data.length === 0) {
-    return <div className="chart-empty">Menunggu data dari sensor...</div>
-  }
+  const hasData = data && data.length > 0
+  const chartData = hasData ? data : PLACEHOLDER_POINTS
 
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <LineChart data={data}>
+      <LineChart data={chartData}>
         <XAxis dataKey="time" tick={{ fontSize: 11 }} />
         <YAxis tick={{ fontSize: 11 }} domain={domain || ['auto', 'auto']} />
         <Tooltip formatter={(v) => [`${v}${unit}`, name]} />
@@ -22,7 +25,7 @@ export default function ChartWithIdealBand({ data, dataKey, name, color, unit, i
             label={{ value: 'Ideal', position: 'insideTopLeft', fontSize: 11, fill: '#0d9468' }}
           />
         )}
-        <Line type="monotone" dataKey={dataKey} name={name} stroke={color} dot={false} strokeWidth={2} />
+        <Line type="monotone" dataKey={dataKey} name={name} stroke={color} dot={false} strokeWidth={2} isAnimationActive={hasData} />
       </LineChart>
     </ResponsiveContainer>
   )

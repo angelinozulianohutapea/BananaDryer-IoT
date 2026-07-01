@@ -4,6 +4,7 @@ import useSocket from '../hooks/useSocket'
 import { sendCommand, controlPusher, controlCutter } from '../hooks/api'
 import Speedometer from '../components/Speedometer'
 import ManualControl from '../components/ManualControl'
+import DualLineChart from '../components/DualLineChart'
 
 const CYCLE_PRESETS = [5, 10, 15, 20]
 
@@ -21,6 +22,7 @@ export default function Pemotong() {
   const [mode, setMode]         = useState('AUTO') // 'AUTO' | 'MANUAL'
   const [cycles, setCycles]     = useState(10)
   const [cmdLoading, setCmdLoading] = useState(false)
+  const [chartData, setChartData] = useState([])
 
   const effectiveState = sensorData?.state || machineState
   const isSlicingPhase = SLICING_PHASES.includes(effectiveState)
@@ -36,8 +38,20 @@ export default function Pemotong() {
   // berjalan penuh (100%), di luar itu 0%. Kalau nanti firmware kirim RPM asli,
   // tinggal ganti nilai ini dengan sensorData.motor_rpm.
   const motorSpeed = pendorongOn || pemotongOn ? 100 : 0
+  const cutterSpeed = pemotongOn ? 100 : 0
 
   const [manualLoading, setManualLoading] = useState({ pusher: false, cutter: false })
+
+  // Rekam histori kecepatan kedua motor buat grafik perbandingan
+  useEffect(() => {
+    if (!sensorData) return
+    const point = {
+      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      pendorong: motorSpeed,
+      pemotong: cutterSpeed,
+    }
+    setChartData(prev => [...prev.slice(-39), point])
+  }, [sensorData, motorSpeed, cutterSpeed])
 
   const sendCmd = async (cmd, value) => {
     setCmdLoading(true)
@@ -131,7 +145,27 @@ export default function Pemotong() {
         <div className="card-title">Kecepatan Motor</div>
         <div className="speedometer-row">
           <Speedometer value={motorSpeed} label="Pendorong (TB1)" color="#3b82f6" />
-          <Speedometer value={pemotongOn ? 100 : 0} label="Pemotong (TB2)" color="#f59e0b" />
+          <Speedometer value={cutterSpeed} label="Pemotong (TB2)" color="#f59e0b" />
+        </div>
+      </div>
+
+      {/* Grafik kecepatan tiap motor — dipisah per card, disandingkan */}
+      <div className="chart-row">
+        <div className="card">
+          <div className="card-title">Grafik Kecepatan Pendorong (TB1)</div>
+          <DualLineChart
+            data={chartData}
+            lines={[{ dataKey: 'pendorong', name: 'Pendorong (TB1)', color: '#3b82f6' }]}
+            idealLine={{ value: 100, label: 'Ideal saat aktif (100%)', color: '#94a3b8' }}
+          />
+        </div>
+        <div className="card">
+          <div className="card-title">Grafik Kecepatan Pemotong (TB2)</div>
+          <DualLineChart
+            data={chartData}
+            lines={[{ dataKey: 'pemotong', name: 'Pemotong (TB2)', color: '#f59e0b' }]}
+            idealLine={{ value: 100, label: 'Ideal saat aktif (100%)', color: '#94a3b8' }}
+          />
         </div>
       </div>
 

@@ -1,3 +1,5 @@
+import { Power, PowerOff } from 'lucide-react'
+
 // Reusable toggle on/off untuk kontrol manual komponen (heater/pemotong/pendorong)
 // disabled saat mode AUTO aktif (biar gak bentrok sama siklus otomatis).
 export default function ManualControl({ icon, label, desc, on, disabled, onToggleOn, onToggleOff, loading }) {
@@ -16,6 +18,7 @@ export default function ManualControl({ icon, label, desc, on, disabled, onToggl
           disabled={disabled || loading || on}
           onClick={onToggleOn}
         >
+          <Power size={16} strokeWidth={2.5} />
           ON
         </button>
         <button
@@ -23,6 +26,7 @@ export default function ManualControl({ icon, label, desc, on, disabled, onToggl
           disabled={disabled || loading || !on}
           onClick={onToggleOff}
         >
+          <PowerOff size={16} strokeWidth={2.5} />
           OFF
         </button>
       </div>
