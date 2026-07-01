@@ -10,6 +10,7 @@ const sensorRoutes  = require('./routes/sensorRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
 const machineRoutes = require('./routes/machineRoutes');
 const alertRoutes   = require('./routes/alertRoutes');
+const settingsRoutes = require('./routes/settingsRoutes');
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use('/api/sensor',  sensorRoutes);
 app.use('/api/session', sessionRoutes);
 app.use('/api/machine', machineRoutes);
 app.use('/api/alerts',  alertRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // ── Health check ─────────────────────────────────────────────
 app.get('/api/health', (req, res) => {

@@ -9,6 +9,7 @@ export default function useSocket() {
   const [machineState, setMachineState] = useState('IDLE')
   const [heartbeat, setHeartbeat]       = useState(null)
   const [alerts, setAlerts]             = useState([])
+  const [earlyComplete, setEarlyComplete] = useState(null)
   const socketRef = useRef(null)
 
   useEffect(() => {
@@ -26,9 +27,12 @@ export default function useSocket() {
     socket.on('alert:new', (alert) => {
       setAlerts(prev => [alert, ...prev].slice(0, 50))
     })
+    socket.on('session:early-complete', (data) => {
+      setEarlyComplete(data)
+    })
 
     return () => socket.disconnect()
   }, [])
 
-  return { connected, sensorData, machineState, heartbeat, alerts }
+  return { connected, sensorData, machineState, heartbeat, alerts, earlyComplete }
 }

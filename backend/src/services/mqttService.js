@@ -8,9 +8,12 @@ const MACHINE_ID = process.env.MACHINE_ID || 'BananaDryer01';
 
 // ── State sesi aktif (in-memory) ────────────────────────────
 let activeSession = {
-  id:         null,
-  startedAt:  null,
-  temps:      [],
+  id:           null,
+  startedAt:    null,
+  temps:        [],
+  setpoint:     null,   // snapshot dryer_settings saat sesi mulai
+  inRangeSince: null,   // timestamp mulai stabil di dalam target
+  earlyStop:    false,  // sudah kirim STOP karena target tercapai lebih awal?
 };
 
 // ── Start ────────────────────────────────────────────────────
@@ -18,7 +21,6 @@ function start() {
   const client = mqttCfg.getClient();
   const { TOPICS } = mqttCfg;
 
-  // Subscribe semua topic
   const topics = [TOPICS.DATA, TOPICS.STATE, TOPICS.STATUS, TOPICS.HEARTBEAT];
   topics.forEach(t => {
     client.subscribe(t, { qos: 1 }, (err) => {
@@ -36,7 +38,6 @@ function start() {
       return;
     }
 
-    // ── Router berdasarkan topic ──────────────────────────
     if (topic === TOPICS.DATA)      await handleData(payload);
     else if (topic === TOPICS.STATE)     await handleState(payload);
     else if (topic === TOPICS.STATUS)    await handleStatus(payload);
@@ -67,8 +68,6 @@ async function handleData(p) {
       if (temp !== null) {
         activeSession.temps.push(temp);
       }
-      // Data cycle ("cycle"/"total") cuma dikirim lewat topic DATA, bukan STATE,
-      // jadi update cycles_done/cycles_total session di sini.
       if (cycCur !== null || cycTot !== null) {
         await pool.query(
           `UPDATE session_logs
@@ -78,6 +77,10 @@ async function handleData(p) {
           [cycCur, cycTot, activeSession.id]
         );
       }
+
+      // Cek apakah target suhu/kelembapan sudah tercapai & stabil
+      // (bisa memicu STOP otomatis sebelum estimasi waktu habis)
+      await _checkTargetReached(temp, hum, state);
     }
 
     socket.emit('sensor:data', {
@@ -97,7 +100,6 @@ async function handleData(p) {
   }
 }
 
-// State yang dianggap "tidak aktif" — di luar ini berarti mesin sedang bekerja
 const NON_ACTIVE_STATES = ['IDLE', 'FINISHED', 'ERROR'];
 
 // ── Handler: STATE ───────────────────────────────────────────
@@ -105,28 +107,39 @@ async function handleState(p) {
   try {
     const state = p.state || null;
 
-    // Update status mesin
     await pool.query(
       `UPDATE machines SET status = 'ONLINE', last_seen = NOW() WHERE machine_id = ?`,
       [MACHINE_ID]
     );
 
-    // Sesi dimulai — begitu state pertama yang "aktif" diterima
-    // (bukan menunggu SERVO_OPENING spesifik, karena paket UART bisa drop/corrupt
-    // dan state itu gak selalu sempat sampai ke backend dengan utuh)
     if (state && !NON_ACTIVE_STATES.includes(state) && !activeSession.id) {
-      const [res] = await pool.query(
-        `INSERT INTO session_logs (machine_id, state, cycles_total, started_at)
-         VALUES (?, ?, ?, NOW())`,
-        [MACHINE_ID, state, p.cycle_total || null]
+      const [[settings]] = await pool.query(
+        `SELECT * FROM dryer_settings WHERE machine_id = ?`,
+        [MACHINE_ID]
       );
-      activeSession.id        = res.insertId;
-      activeSession.startedAt = new Date();
-      activeSession.temps     = [];
+
+      const [res] = await pool.query(
+        `INSERT INTO session_logs
+           (machine_id, state, cycles_total, started_at,
+            target_temp_min, target_temp_max, target_humidity_max, estimated_duration_sec)
+         VALUES (?, ?, ?, NOW(), ?, ?, ?, ?)`,
+        [
+          MACHINE_ID, state, p.cycle_total || null,
+          settings?.target_temp_min ?? null,
+          settings?.target_temp_max ?? null,
+          settings?.target_humidity_max ?? null,
+          settings ? settings.estimated_duration_min * 60 : null,
+        ]
+      );
+      activeSession.id           = res.insertId;
+      activeSession.startedAt    = new Date();
+      activeSession.temps        = [];
+      activeSession.setpoint     = settings || null;
+      activeSession.inRangeSince = null;
+      activeSession.earlyStop    = false;
       console.log(`[Session] Started, id=${activeSession.id}`);
     }
 
-    // Update state sesi aktif
     if (activeSession.id && state) {
       await pool.query(
         `UPDATE session_logs SET state = ?, cycles_done = ? WHERE id = ?`,
@@ -134,19 +147,16 @@ async function handleState(p) {
       );
     }
 
-    // Sesi selesai atau error
     if (state === 'FINISHED' || state === 'ERROR' || state === 'IDLE') {
       if (activeSession.id) {
         await _closeSession(state);
       }
     }
 
-    // Alert jika EMERGENCY_STOP
     if (state === 'ERROR') {
       await _createAlert('EMERGENCY_STOP', `State error: ${JSON.stringify(p)}`);
     }
 
-    // Emit ke dashboard
     socket.emit('machine:state', { machine_id: MACHINE_ID, state, ts: p.ts });
 
   } catch (err) {
@@ -212,13 +222,13 @@ async function _closeSession(result) {
   await pool.query(
     `UPDATE session_logs
      SET finished_at = NOW(), duration_sec = ?, result = ?,
-         temp_avg = ?, temp_max = ?, temp_min = ?
+         temp_avg = ?, temp_max = ?, temp_min = ?, early_stop = ?
      WHERE id = ?`,
-    [durSec, resultMap[result] || 'STOPPED', avg, max, min, activeSession.id]
+    [durSec, resultMap[result] || 'STOPPED', avg, max, min, activeSession.earlyStop ? 1 : 0, activeSession.id]
   );
 
-  console.log(`[Session] Closed id=${activeSession.id}, result=${result}`);
-  activeSession = { id: null, startedAt: null, temps: [] };
+  console.log(`[Session] Closed id=${activeSession.id}, result=${result}${activeSession.earlyStop ? ' (early-stop)' : ''}`);
+  activeSession = { id: null, startedAt: null, temps: [], setpoint: null, inRangeSince: null, earlyStop: false };
 }
 
 // ── Helper: buat alert ───────────────────────────────────────
@@ -228,6 +238,61 @@ async function _createAlert(type, message) {
     [MACHINE_ID, type, message]
   );
   socket.emit('alert:new', { id: result.insertId, machine_id: MACHINE_ID, type, message, acknowledged: 0, ts: new Date() });
+}
+
+// ── Helper: cek apakah target suhu/kelembapan sudah tercapai & stabil ──
+// Dipanggil tiap ada data sensor baru saat state = DRYING.
+// Kalau temp & humidity berada di dalam band ideal selama >= stable_minutes
+// TANPA putus, mesin dianggap sudah kering — kirim STOP walau estimasi
+// waktu belum habis.
+async function _checkTargetReached(temp, hum, state) {
+  if (!activeSession.id || state !== 'DRYING' || !activeSession.setpoint) return;
+  if (temp === null || hum === null) return;
+  if (activeSession.earlyStop) return;
+
+  const sp = activeSession.setpoint;
+  const inRange = temp >= sp.target_temp_min && temp <= sp.target_temp_max
+                && hum <= sp.target_humidity_max;
+
+  if (!inRange) {
+    activeSession.inRangeSince = null;
+    return;
+  }
+
+  if (!activeSession.inRangeSince) {
+    activeSession.inRangeSince = Date.now();
+    return;
+  }
+
+  const stableMs   = Date.now() - activeSession.inRangeSince;
+  const requiredMs = sp.stable_minutes * 60 * 1000;
+
+  if (stableMs >= requiredMs) {
+    activeSession.earlyStop = true;
+
+    const elapsedSec   = Math.floor((Date.now() - activeSession.startedAt.getTime()) / 1000);
+    const estimatedSec = sp.estimated_duration_min * 60;
+    const savedSec      = Math.max(0, estimatedSec - elapsedSec);
+
+    console.log(`[Session] Target tercapai lebih awal! id=${activeSession.id}, hemat ${Math.floor(savedSec / 60)} menit`);
+
+    try {
+      mqttCfg.publishCommand('STOP');
+    } catch (err) {
+      console.error('[mqttService] Gagal publish STOP saat early-stop:', err.message);
+    }
+
+    socket.emit('session:early-complete', {
+      machine_id:    MACHINE_ID,
+      session_id:    activeSession.id,
+      elapsed_sec:   elapsedSec,
+      estimated_sec: estimatedSec,
+      saved_sec:     savedSec,
+      temperature:   temp,
+      humidity:      hum,
+      ts: new Date(),
+    });
+  }
 }
 
 module.exports = { start };

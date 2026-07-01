@@ -1,9 +1,11 @@
-import { Activity, History, Bell } from 'lucide-react'
+import { Activity, Scissors, Wind, History, Bell } from 'lucide-react'
 
 const nav = [
   { id: 'dashboard', label: 'Dashboard', icon: Activity },
+  { id: 'pemotong',  label: 'Pemotong',  icon: Scissors },
+  { id: 'pengering', label: 'Pengering', icon: Wind },
   { id: 'history',   label: 'Riwayat',   icon: History },
-  { id: 'alerts',    label: 'Alert',      icon: Bell },
+  { id: 'alerts',    label: 'Alert',     icon: Bell },
 ]
 
 export default function Sidebar({ page, setPage }) {

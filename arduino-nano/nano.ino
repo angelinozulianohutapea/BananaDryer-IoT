@@ -1,7 +1,13 @@
 // ============================================================
-// BananaDryer — Arduino Nano Firmware v2.3
+// BananaDryer — Arduino Nano Firmware v2.4
 // Finite State Machine (FSM) — Non-Blocking (millis)
 // Komunikasi UART dengan ESP32 (protokol '$')
+//
+// Perubahan dari v2.3:
+//  + Manual control independen (HEATER/PUSHER/CUTTER) — hanya
+//    aktif saat STATE_IDLE, tidak mengganggu FSM otomatis.
+//  + Guard START agar tidak bisa mulai siklus otomatis saat
+//    manual pusher/cutter sedang aktif.
 //
 // Perubahan dari v2.2:
 //  ~ DHT error handling: pakai lastTemp dulu, ERROR hanya setelah
@@ -112,13 +118,21 @@ int  currentCycle   = 0;
 // Heater
 bool heaterState    = false;
 
-// Stepper (non-blocking pulse)
+// Stepper (non-blocking pulse) — dipakai FSM otomatis
 bool          tb1PulHigh     = false;
 bool          tb2PulHigh     = false;
 unsigned long tb1LastUs      = 0;
 unsigned long tb2LastUs      = 0;
 unsigned long stepperStartMs = 0;
 bool          stepperActive  = false;
+
+// Manual control (independen dari FSM, hanya aktif saat STATE_IDLE)
+bool          manualPusherActive  = false;
+bool          manualCutterActive  = false;
+bool          manualPusherPulHigh = false;
+bool          manualCutterPulHigh = false;
+unsigned long manualPusherLastUs  = 0;
+unsigned long manualCutterLastUs  = 0;
 
 // Timing state transitions
 unsigned long stateEnteredMs = 0;
@@ -155,6 +169,11 @@ void updateStepper();
 void doEmergencyStop(const char* reason);
 void sendData();
 const char* stateToStr(MachineState s);
+void manualPusherStart(bool forward);
+void manualPusherStop();
+void manualCutterStart();
+void manualCutterStop();
+void updateManualPulses();
 
 // ============================================================
 // INTERRUPT — Emergency Stop tombol fisik
@@ -168,6 +187,8 @@ void ESTOP_ISR() {
 // ============================================================
 void doEmergencyStop(const char* reason) {
   stopStepper();
+  manualPusherStop();
+  manualCutterStop();
   setHeater(false);
   myServo.write(SERVO_CLOSE_POS);
   totalCycles    = 0;
@@ -342,7 +363,7 @@ void enterState(MachineState s) {
 }
 
 // ============================================================
-// STEPPER — Mulai maju (TB1 + TB2 ON)
+// STEPPER — Mulai maju (TB1 + TB2 ON)  [dipakai FSM otomatis]
 // ============================================================
 void startStepperForward() {
   digitalWrite(TB1_DIR, LOW);
@@ -364,7 +385,7 @@ void startStepperForward() {
 }
 
 // ============================================================
-// STEPPER — Mulai mundur (TB1 saja, TB2 OFF)
+// STEPPER — Mulai mundur (TB1 saja, TB2 OFF)  [FSM otomatis]
 // ============================================================
 void startStepperReturn() {
   digitalWrite(TB2_ENA, HIGH);
@@ -381,7 +402,7 @@ void startStepperReturn() {
 }
 
 // ============================================================
-// STEPPER — Berhenti
+// STEPPER — Berhenti  [FSM otomatis]
 // ============================================================
 void stopStepper() {
   digitalWrite(TB1_ENA, HIGH);
@@ -394,7 +415,7 @@ void stopStepper() {
 }
 
 // ============================================================
-// STEPPER — Update pulse (dipanggil setiap loop)
+// STEPPER — Update pulse (dipanggil setiap loop)  [FSM otomatis]
 // ============================================================
 void updateStepper() {
   if (!stepperActive) return;
@@ -456,6 +477,91 @@ void updateStepper() {
 }
 
 // ============================================================
+// MANUAL — Pendorong (TB1)
+// Hanya boleh dipanggil saat STATE_IDLE (dicek di readUART()).
+// Independen dari TB2 (pemotong).
+// ============================================================
+void manualPusherStart(bool forward) {
+  digitalWrite(TB1_DIR, forward ? LOW : HIGH);
+  digitalWrite(TB1_ENA, LOW);
+  manualPusherPulHigh = false;
+  manualPusherLastUs  = micros();
+  manualPusherActive  = true;
+  Serial.println(forward ? "$MANUAL:PUSHER_FWD" : "$MANUAL:PUSHER_REV");
+}
+
+void manualPusherStop() {
+  digitalWrite(TB1_ENA, HIGH);
+  digitalWrite(TB1_PUL, LOW);
+  manualPusherActive  = false;
+  manualPusherPulHigh = false;
+  Serial.println("$MANUAL:PUSHER_STOP");
+}
+
+// ============================================================
+// MANUAL — Pemotong (TB2)
+// Hanya boleh dipanggil saat STATE_IDLE (dicek di readUART()).
+// Independen dari TB1 (pendorong).
+// ============================================================
+void manualCutterStart() {
+  digitalWrite(TB2_DIR, HIGH);
+  digitalWrite(TB2_ENA, LOW);
+  manualCutterPulHigh = false;
+  manualCutterLastUs  = micros();
+  manualCutterActive  = true;
+  Serial.println("$MANUAL:CUTTER_ON");
+}
+
+void manualCutterStop() {
+  digitalWrite(TB2_ENA, HIGH);
+  digitalWrite(TB2_PUL, LOW);
+  manualCutterActive  = false;
+  manualCutterPulHigh = false;
+  Serial.println("$MANUAL:CUTTER_OFF");
+}
+
+// ============================================================
+// MANUAL — Update pulse (dipanggil setiap loop, non-blocking)
+// ============================================================
+void updateManualPulses() {
+  unsigned long nowUs;
+
+  if (manualPusherActive) {
+    nowUs = micros();
+    if (!manualPusherPulHigh) {
+      if (nowUs - manualPusherLastUs >= (unsigned long)TB1_STEP_US) {
+        digitalWrite(TB1_PUL, HIGH);
+        manualPusherPulHigh = true;
+        manualPusherLastUs  = nowUs;
+      }
+    } else {
+      if (nowUs - manualPusherLastUs >= (unsigned long)TB1_STEP_US) {
+        digitalWrite(TB1_PUL, LOW);
+        manualPusherPulHigh = false;
+        manualPusherLastUs  = nowUs;
+      }
+    }
+  }
+
+  if (manualCutterActive) {
+    nowUs = micros();
+    if (!manualCutterPulHigh) {
+      if (nowUs - manualCutterLastUs >= (unsigned long)TB2_STEP_US) {
+        digitalWrite(TB2_PUL, HIGH);
+        manualCutterPulHigh = true;
+        manualCutterLastUs  = nowUs;
+      }
+    } else {
+      if (nowUs - manualCutterLastUs >= (unsigned long)TB2_STEP_US) {
+        digitalWrite(TB2_PUL, LOW);
+        manualCutterPulHigh = false;
+        manualCutterLastUs  = nowUs;
+      }
+    }
+  }
+}
+
+// ============================================================
 // UART — Baca perintah dari ESP32
 // ============================================================
 void readUART() {
@@ -483,6 +589,9 @@ void readUART() {
 
     // ---- START ----
     else if (cmd == "START") {
+      if (manualPusherActive || manualCutterActive) {
+        Serial.println("$ERROR:MANUAL_ACTIVE"); return;
+      }
       if (currentState != STATE_IDLE) {
         Serial.println("$ERROR:NOT_IDLE"); return;
       }
@@ -532,6 +641,60 @@ void readUART() {
     // ---- STATUS ----
     else if (cmd == "STATUS") {
       sendData();
+    }
+
+    // ---- HEATER manual ----
+    else if (cmd == "HEATER:ON") {
+      if (currentState != STATE_IDLE) {
+        Serial.println("$ERROR:BUSY");
+      } else {
+        setHeater(true);
+        Serial.println("$ACK:HEATER_ON");
+      }
+    }
+    else if (cmd == "HEATER:OFF") {
+      if (currentState != STATE_IDLE) {
+        Serial.println("$ERROR:BUSY");
+      } else {
+        setHeater(false);
+        Serial.println("$ACK:HEATER_OFF");
+      }
+    }
+
+    // ---- PUSHER manual ----
+    else if (cmd == "PUSHER:FWD") {
+      if (currentState != STATE_IDLE || manualCutterActive) {
+        Serial.println("$ERROR:BUSY");
+      } else {
+        manualPusherStart(true);
+        Serial.println("$ACK:PUSHER_FWD");
+      }
+    }
+    else if (cmd == "PUSHER:REV") {
+      if (currentState != STATE_IDLE || manualCutterActive) {
+        Serial.println("$ERROR:BUSY");
+      } else {
+        manualPusherStart(false);
+        Serial.println("$ACK:PUSHER_REV");
+      }
+    }
+    else if (cmd == "PUSHER:STOP") {
+      manualPusherStop();
+      Serial.println("$ACK:PUSHER_STOP");
+    }
+
+    // ---- CUTTER manual ----
+    else if (cmd == "CUTTER:ON") {
+      if (currentState != STATE_IDLE || manualPusherActive) {
+        Serial.println("$ERROR:BUSY");
+      } else {
+        manualCutterStart();
+        Serial.println("$ACK:CUTTER_ON");
+      }
+    }
+    else if (cmd == "CUTTER:OFF") {
+      manualCutterStop();
+      Serial.println("$ACK:CUTTER_OFF");
     }
   }
 }
@@ -587,6 +750,7 @@ void loop() {
 
   readUART();
   updateStepper();
+  updateManualPulses();
 
   unsigned long now = millis();
 
@@ -658,6 +822,8 @@ void loop() {
   if (currentState == STATE_ERROR) {
     // Pastikan semua aktuator mati (guard tambahan)
     if (stepperActive) stopStepper();
+    if (manualPusherActive) manualPusherStop();
+    if (manualCutterActive) manualCutterStop();
     if (heaterState)   setHeater(false);
     return;
   }

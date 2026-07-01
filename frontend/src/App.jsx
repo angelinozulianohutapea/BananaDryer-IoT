@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import Dashboard from './pages/Dashboard'
+import Pemotong from './pages/Pemotong'
+import Pengering from './pages/Pengering'
 import History from './pages/History'
 import Alerts from './pages/Alerts'
 import Sidebar from './components/Sidebar'
@@ -12,6 +14,8 @@ export default function App() {
       <Sidebar page={page} setPage={setPage} />
       <main className="main-content">
         {page === 'dashboard' && <Dashboard />}
+        {page === 'pemotong'  && <Pemotong />}
+        {page === 'pengering' && <Pengering />}
         {page === 'history'   && <History />}
         {page === 'alerts'    && <Alerts />}
       </main>

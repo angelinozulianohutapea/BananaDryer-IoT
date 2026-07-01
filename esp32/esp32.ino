@@ -1,8 +1,14 @@
 // ============================================================
-// BananaDryer — ESP32 Firmware v1.3
+// BananaDryer — ESP32 Firmware v1.4
 // IoT Gateway: UART ↔ WiFi ↔ MQTT
 //
-// Perubahan dari v1.2:
+// Perubahan dari v1.3:
+//   [O] Forward command manual baru ke Nano: HEATER, PUSHER, CUTTER
+//       Format MQTT: {"cmd":"HEATER","value":"ON"}  -> $HEATER:ON
+//                    {"cmd":"PUSHER","value":"FWD"}  -> $PUSHER:FWD
+//                    {"cmd":"CUTTER","value":"ON"}   -> $CUTTER:ON
+//
+// Perubahan dari v1.2 -> v1.3:
 //   [I] WiFi reconnect lebih robust — disconnect+begin setelah 3x gagal
 //   [J] NTP timezone pakai configTzTime("WIB-7") — standar POSIX
 //   [K] Heartbeat diperkaya: ChipModel, CpuFreq, FlashSize
@@ -55,7 +61,7 @@
 
 // Identitas mesin
 #define MACHINE_ID       "BananaDryer01"
-#define FIRMWARE_VER     "1.3.0"
+#define FIRMWARE_VER     "1.4.0"
 #define HARDWARE_REV     "RevA"
 
 // MQTT Topics
@@ -455,6 +461,16 @@ void processNanoLine(const char* line) {
       mqttClient.publish(TOPIC_STATUS, out);
     }
   }
+  else if (strncmp(body, "MANUAL:", 7) == 0) {
+    if (isConnected()) {
+      char ts[32]; getTimestamp(ts, sizeof(ts));
+      char out[192];
+      snprintf(out, sizeof(out),
+        "{\"machine\":\"%s\",\"manual\":\"%s\",\"ts\":\"%s\"}",
+        MACHINE_ID, body + 7, ts);
+      mqttClient.publish(TOPIC_STATUS, out);
+    }
+  }
   else if (strncmp(body, "ACK:", 4)  == 0 ||
            strcmp(body,  "READY")    == 0 ||
            strncmp(body, "CYCLE:", 6) == 0) {
@@ -493,7 +509,8 @@ void readUartNonBlocking() {
 }
 
 // ============================================================
-// [G] MQTT Callback — QoS 1 untuk TOPIC_CMD
+// [G][O] MQTT Callback — QoS 1 untuk TOPIC_CMD
+//        + forwarding manual command (HEATER/PUSHER/CUTTER)
 // ============================================================
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   char msg[256] = "";
@@ -524,6 +541,30 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
       snprintf(uartCmd, sizeof(uartCmd), "$CYCLES:%d", cycles);
       forwardToNano(uartCmd);
       publishStatus("CMD_ACK:CYCLES");
+    }
+    // [O] Manual — Heater. value: "ON" / "OFF"
+    else if (strcmp(cmd, "HEATER") == 0 && doc.containsKey("value")) {
+      const char* v = doc["value"];
+      char uartCmd[24];
+      snprintf(uartCmd, sizeof(uartCmd), "$HEATER:%s", v);
+      forwardToNano(uartCmd);
+      publishStatus("CMD_ACK:HEATER");
+    }
+    // [O] Manual — Pendorong. value: "FWD" / "REV" / "STOP"
+    else if (strcmp(cmd, "PUSHER") == 0 && doc.containsKey("value")) {
+      const char* v = doc["value"];
+      char uartCmd[24];
+      snprintf(uartCmd, sizeof(uartCmd), "$PUSHER:%s", v);
+      forwardToNano(uartCmd);
+      publishStatus("CMD_ACK:PUSHER");
+    }
+    // [O] Manual — Pemotong. value: "ON" / "OFF"
+    else if (strcmp(cmd, "CUTTER") == 0 && doc.containsKey("value")) {
+      const char* v = doc["value"];
+      char uartCmd[24];
+      snprintf(uartCmd, sizeof(uartCmd), "$CUTTER:%s", v);
+      forwardToNano(uartCmd);
+      publishStatus("CMD_ACK:CUTTER");
     }
   } else {
     // Fallback plain text (tes manual via MQTT client)

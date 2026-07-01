@@ -23,4 +23,13 @@ export const sendCommand = (cmd, value) => {
   return Promise.reject(new Error('Unknown command'))
 }
 
+// ── Manual control per-komponen ──────────────────────────────
+export const controlHeater = (state) => api.post('/machine/BananaDryer01/heater', { state }) // 'ON' | 'OFF'
+export const controlPusher = (action) => api.post('/machine/BananaDryer01/pusher', { action }) // 'FORWARD' | 'REVERSE' | 'STOP'
+export const controlCutter = (state) => api.post('/machine/BananaDryer01/cutter', { state }) // 'ON' | 'OFF'
+
+// ── Setpoint / setting kustom ─────────────────────────────────
+export const getSettings    = () => api.get('/settings')
+export const updateSettings = (payload) => api.put('/settings', payload)
+
 export default api

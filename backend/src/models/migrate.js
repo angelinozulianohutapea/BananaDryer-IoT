@@ -3,6 +3,19 @@
 require('dotenv').config();
 const pool = require('../config/database');
 
+// ── Helper: tambah kolom hanya jika belum ada (aman dijalankan berulang) ──
+async function addColumnIfNotExists(conn, table, column, definition) {
+  const [rows] = await conn.query(
+    `SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [table, column]
+  );
+  if (rows[0].cnt === 0) {
+    await conn.query(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    console.log(`[Migrate] ✅ Kolom baru: ${table}.${column}`);
+  }
+}
+
 async function migrate() {
   const conn = await pool.getConnection();
 
@@ -64,6 +77,14 @@ async function migrate() {
     `);
     console.log('[Migrate] ✅ Table: session_logs');
 
+    // 3b. session_logs — kolom tambahan: snapshot setpoint & flag early-stop
+    await addColumnIfNotExists(conn, 'session_logs', 'target_temp_min', 'DECIMAL(5,2) AFTER cycles_done');
+    await addColumnIfNotExists(conn, 'session_logs', 'target_temp_max', 'DECIMAL(5,2) AFTER target_temp_min');
+    await addColumnIfNotExists(conn, 'session_logs', 'target_humidity_max', 'DECIMAL(5,2) AFTER target_temp_max');
+    await addColumnIfNotExists(conn, 'session_logs', 'estimated_duration_sec', 'INT UNSIGNED AFTER target_humidity_max');
+    await addColumnIfNotExists(conn, 'session_logs', 'early_stop', 'TINYINT(1) DEFAULT 0 AFTER result');
+    console.log('[Migrate] ✅ Kolom setpoint & early_stop di session_logs siap');
+
     // 4. alerts — log peringatan/error
     await conn.query(`
       CREATE TABLE IF NOT EXISTS alerts (
@@ -91,12 +112,33 @@ async function migrate() {
     `);
     console.log('[Migrate] ✅ Table: users');
 
+    // 6. dryer_settings — setpoint custom (target suhu/kelembapan, estimasi waktu)
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS dryer_settings (
+        machine_id             VARCHAR(50) PRIMARY KEY,
+        target_temp_min        DECIMAL(5,2) NOT NULL DEFAULT 50.00,
+        target_temp_max        DECIMAL(5,2) NOT NULL DEFAULT 60.00,
+        target_humidity_max    DECIMAL(5,2) NOT NULL DEFAULT 20.00,
+        estimated_duration_min INT UNSIGNED NOT NULL DEFAULT 180,
+        stable_minutes         INT UNSIGNED NOT NULL DEFAULT 5,
+        updated_at             DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+    console.log('[Migrate] ✅ Table: dryer_settings');
+
     // Seed machine default
     await conn.query(`
       INSERT IGNORE INTO machines (machine_id, name, location)
       VALUES (?, 'BananaDryer Unit 1', 'Lab IoT');
     `, [process.env.MACHINE_ID || 'BananaDryer01']);
     console.log('[Migrate] ✅ Seed: machines');
+
+    // Seed dryer_settings default
+    await conn.query(`
+      INSERT IGNORE INTO dryer_settings (machine_id)
+      VALUES (?);
+    `, [process.env.MACHINE_ID || 'BananaDryer01']);
+    console.log('[Migrate] ✅ Seed: dryer_settings');
 
     console.log('[Migrate] Migrasi selesai!');
   } catch (err) {

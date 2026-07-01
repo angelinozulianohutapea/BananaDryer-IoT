@@ -61,4 +61,52 @@ async function setCycles(req, res) {
   }
 }
 
-module.exports = { getStatus, start, stop, reset, setCycles };
+// ── Kontrol manual per-komponen ──────────────────────────────
+// CATATAN: command ini baru berfungsi kalau firmware Nano sudah
+// menambahkan handler untuk $HEATER / $PUSHER / $CUTTER di readUART().
+// Selama itu belum ada, endpoint ini tetap bisa dipanggil (gak error),
+// tapi mesin belum akan merespon sampai firmware diupdate.
+
+// POST /api/machine/heater  — body: { state: 'ON' | 'OFF' }
+async function heater(req, res) {
+  try {
+    const state = String(req.body.state || '').toUpperCase();
+    if (state !== 'ON' && state !== 'OFF') {
+      return res.status(400).json({ success: false, message: 'state harus ON atau OFF' });
+    }
+    mqttCfg.publishCommand('HEATER', state);
+    res.json({ success: true, message: `Command HEATER:${state} dikirim ke ESP32` });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+// POST /api/machine/pusher  — body: { action: 'FORWARD' | 'REVERSE' | 'STOP' }
+async function pusher(req, res) {
+  try {
+    const action = String(req.body.action || '').toUpperCase();
+    if (!['FORWARD', 'REVERSE', 'STOP'].includes(action)) {
+      return res.status(400).json({ success: false, message: 'action harus FORWARD, REVERSE, atau STOP' });
+    }
+    mqttCfg.publishCommand('PUSHER', action);
+    res.json({ success: true, message: `Command PUSHER:${action} dikirim ke ESP32` });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+// POST /api/machine/cutter  — body: { state: 'ON' | 'OFF' }
+async function cutter(req, res) {
+  try {
+    const state = String(req.body.state || '').toUpperCase();
+    if (state !== 'ON' && state !== 'OFF') {
+      return res.status(400).json({ success: false, message: 'state harus ON atau OFF' });
+    }
+    mqttCfg.publishCommand('CUTTER', state);
+    res.json({ success: true, message: `Command CUTTER:${state} dikirim ke ESP32` });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+module.exports = { getStatus, start, stop, reset, setCycles, heater, pusher, cutter };
