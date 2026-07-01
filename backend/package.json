@@ -1,0 +1,27 @@
+{
+  "name": "bananadryer-backend",
+  "version": "1.0.0",
+  "description": "BananaDryer IoT Backend — Node.js + Express + MQTT + MySQL + Socket.IO",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "migrate": "node src/models/migrate.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.2",
+    "morgan": "^1.10.0",
+    "mqtt": "^5.15.1",
+    "mysql2": "^3.6.5",
+    "pg": "^8.22.0",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
