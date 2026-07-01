@@ -1,9 +1,17 @@
-import { useState, useEffect, useRef } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { Thermometer, Droplets, RotateCcw, Cpu, Flame, Scissors, ArrowRightLeft } from 'lucide-react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import {
+  RotateCcw, Flame, Scissors, ArrowRightLeft,
+  Settings as SettingsIcon, History as HistoryIcon, Bell, Clock, ListChecks, Wifi, Cpu,
+} from 'lucide-react'
 import useSocket from '../hooks/useSocket'
-import { sendCommand, getMachineStatus } from '../hooks/api'
-import StatCard from '../components/StatCard'
+import { sendCommand, getSessions, getSettings, getAlerts } from '../hooks/api'
+
+function fmtDuration(sec) {
+  if (sec === null || sec === undefined) return '-'
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  return h > 0 ? `${h}j ${m}m` : `${m}m`
+}
 
 const STATE_COLOR = {
   IDLE: '#6b7280', DRYING: '#f59e0b', FINISHED: '#10b981',
@@ -12,66 +20,88 @@ const STATE_COLOR = {
   SERVO_WAIT: '#3b82f6',
 }
 
-// State yang termasuk fase "memotong" — progress di fase ini cuma merepresentasikan
-// rasio siklus pemotongan (current/total), BUKAN progress keseluruhan proses.
-// Fase mengering (DRYING) baru progress berbasis waktu yang sebenarnya.
 const SLICING_PHASES = ['SERVO_OPENING', 'SLICING_FORWARD', 'SLICING_RETURN', 'SERVO_WAIT', 'SERVO_CLOSING']
 
-// Status aktuator pemotong & pendorong diturunkan dari state mesin,
-// karena firmware belum mengirim field ON/OFF terpisah untuk itu.
-function getActuatorStatus(state, heater) {
-  const pendorong = state === 'SLICING_FORWARD' || state === 'SLICING_RETURN'
-  const pemotong   = state === 'SLICING_FORWARD'
-  return {
-    heater:    heater === 'ON',
-    pemotong,
-    pendorong,
-  }
-}
-
 const STATE_LABEL = {
-  IDLE: 'Sistem siaga (IDLE)',
+  IDLE: 'Sistem siaga, menunggu perintah',
   SERVO_OPENING: 'Servo membuka',
   SLICING_FORWARD: 'Pemotongan berlangsung — pendorong & pisau aktif',
   SLICING_RETURN: 'Pendorong mundur',
   SERVO_WAIT: 'Menunggu irisan masuk',
   SERVO_CLOSING: 'Servo menutup',
-  DRYING: 'Sistem BananaDryer aktif, heater menyala',
+  DRYING: 'Proses pengeringan aktif, heater menyala',
   FINISHED: 'Siklus selesai, target tercapai',
   ERROR: 'Terjadi error pada sistem',
 }
 
-export default function Dashboard() {
+// Dashboard = HALAMAN OVERVIEW, sengaja beda LAYOUT dari halaman lain (bukan cuma
+// tumpukan .card kayak Pemotong/Pengering/Settings). Di sini pakai bento-grid:
+// hero status + kesehatan sistem sejajar di atas, lalu ringkasan (angka besar) +
+// timeline aktivitas sejajar di bawah, dan akses cepat sebagai baris chip tanpa
+// bingkai card. Isinya juga sengaja gak dobel sama konten Pemotong/Pengering.
+export default function Dashboard({ onNavigate }) {
   const { connected, sensorData, machineState, heartbeat, alerts } = useSocket()
-  const [chartData, setChartData] = useState([])
   const [cmdLoading, setCmdLoading] = useState(false)
-  const [machineInfo, setMachineInfo] = useState(null)
   const [stateLog, setStateLog] = useState([])
   const prevStateRef = useRef(null)
 
-  // sensorData.state dipakai sebagai sumber utama (lihat catatan versi sebelumnya):
-  // lebih reliable daripada machineState karena dikirim berkala, bukan sekali per transisi.
-  const effectiveState = sensorData?.state || machineState
+  const [sessions, setSessions] = useState([])
+  const [settings, setSettings] = useState(null)
+  const [unreadAlerts, setUnreadAlerts] = useState(0)
+  const [elapsedSec, setElapsedSec] = useState(0)
+  const startedAtRef = useRef(null)
 
-  // Load status awal
+  const effectiveState = sensorData?.state || machineState
+  const isDrying = effectiveState === 'DRYING'
+  const isSlicingPhase = SLICING_PHASES.includes(effectiveState)
+  const cycleCurrent = sensorData?.cycle_current ?? sensorData?.cycle ?? 0
+  const cycleTotal   = sensorData?.cycle_total   ?? sensorData?.total ?? 0
+  const stateColor   = STATE_COLOR[effectiveState] || '#6b7280'
+
   useEffect(() => {
-    getMachineStatus()
-      .then(r => setMachineInfo(r.data?.data))
-      .catch(() => {})
+    getSessions().then(r => setSessions(r.data?.data || [])).catch(() => {})
+    getSettings().then(r => setSettings(r.data?.data)).catch(() => {})
   }, [])
 
-  // Tambah data ke chart (max 30 titik)
   useEffect(() => {
-    if (!sensorData) return
-    const point = {
-      time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      temp: sensorData.temperature,
-      hum:  sensorData.humidity,
-    }
-    setChartData(prev => [...prev.slice(-29), point])
-  }, [sensorData])
+    getAlerts(true).then(r => setUnreadAlerts(r.data?.count ?? (r.data?.data || []).length)).catch(() => {})
+  }, [alerts.length])
 
-  // Catat perubahan state ke log lokal (realtime, sesi berjalan ini)
+  useEffect(() => {
+    if (effectiveState === 'FINISHED' || effectiveState === 'IDLE') {
+      getSessions().then(r => setSessions(r.data?.data || [])).catch(() => {})
+    }
+  }, [effectiveState])
+
+  useEffect(() => {
+    if (isDrying && !startedAtRef.current) startedAtRef.current = Date.now()
+    if (!isDrying) { startedAtRef.current = null; setElapsedSec(0) }
+  }, [isDrying])
+
+  useEffect(() => {
+    if (!isDrying) return
+    const t = setInterval(() => {
+      if (startedAtRef.current) setElapsedSec(Math.floor((Date.now() - startedAtRef.current) / 1000))
+    }, 1000)
+    return () => clearInterval(t)
+  }, [isDrying])
+
+  const estimatedSec = settings ? settings.estimated_duration_min * 60 : null
+  const progressPct  = estimatedSec ? Math.min(100, (elapsedSec / estimatedSec) * 100) : 0
+
+  const todaySummary = useMemo(() => {
+    const todayStr = new Date().toDateString()
+    const todays = sessions.filter(s => s.started_at && new Date(s.started_at).toDateString() === todayStr)
+    return {
+      count:        todays.length,
+      totalCycles:  todays.reduce((sum, s) => sum + (s.cycles_done || 0), 0),
+      totalDurSec:  todays.reduce((sum, s) => sum + (s.duration_sec || 0), 0),
+      finished:     todays.filter(s => s.result === 'FINISHED').length,
+      earlyStopped: todays.filter(s => !!s.early_stop).length,
+      errored:      todays.filter(s => s.result === 'ERROR').length,
+    }
+  }, [sessions])
+
   useEffect(() => {
     if (!effectiveState || effectiveState === prevStateRef.current) return
     prevStateRef.current = effectiveState
@@ -85,7 +115,6 @@ export default function Dashboard() {
     setStateLog(prev => [entry, ...prev].slice(0, 20))
   }, [effectiveState])
 
-  // Gabungkan alert asli dari backend (alert:new) dengan histori perubahan state lokal
   const activityLog = [
     ...alerts.map(a => ({
       id: `alert-${a.id || a.ts}`,
@@ -94,188 +123,154 @@ export default function Dashboard() {
       type: a.type === 'EMERGENCY_STOP' || a.type === 'SENSOR_ERROR' ? 'error' : 'warning',
     })),
     ...stateLog,
-  ].sort((a, b) => b.ts - a.ts).slice(0, 20)
+  ].sort((a, b) => b.ts - a.ts).slice(0, 10)
 
-  const sendCmd = async (cmd, value) => {
+  const doEmergencyStop = async () => {
+    if (!window.confirm('Hentikan mesin sekarang juga?')) return
     setCmdLoading(true)
-    try { await sendCommand(cmd, value) }
-    catch (e) { alert('Gagal kirim perintah: ' + e.message) }
+    try { await sendCommand('STOP') }
+    catch (e) { alert('Gagal kirim perintah stop: ' + e.message) }
     finally { setCmdLoading(false) }
   }
 
-  const stateColor = STATE_COLOR[effectiveState] || '#6b7280'
-  const actuators  = getActuatorStatus(effectiveState, sensorData?.heater)
-  const cycleCurrent = sensorData?.cycle_current ?? sensorData?.cycle ?? 0
-  const cycleTotal   = sensorData?.cycle_total   ?? sensorData?.total ?? 0
-  const isSlicingPhase = SLICING_PHASES.includes(effectiveState)
+  const dotColor = { error: '#ef4444', success: '#10b981', warning: '#f59e0b', info: '#6b7280' }
 
   return (
-    <div className="page">
-      {/* Header */}
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">BananaDryer01</h1>
-          <p className="page-subtitle">Ringkasan Monitoring Realtime — detail kontrol ada di halaman Pemotong &amp; Pengering</p>
-        </div>
-        <div className="status-badge" style={{ background: stateColor + '22', color: stateColor, border: `1px solid ${stateColor}` }}>
-          <span className="status-dot" style={{ background: stateColor }} />
-          {effectiveState || 'IDLE'}
-        </div>
+    <div className="page dash-page">
+      {/* Bar judul tipis — bukan page-header besar kayak halaman lain, karena identitas
+          halaman ini sudah dibawa oleh hero status di bawah */}
+      <div className="dash-topbar">
+        <span className="dash-topbar-title">Smart Banana System</span>
+        <span className={`dash-topbar-conn ${connected ? 'is-ok' : 'is-err'}`}>
+          <span className="status-dot" /> {connected ? 'Terhubung' : 'Terputus'}
+        </span>
       </div>
 
-      {/* Koneksi */}
-      <div className={`conn-bar ${connected ? 'conn-ok' : 'conn-err'}`}>
-        {connected ? '🟢 Socket.IO terhubung — data realtime aktif' : '🔴 Tidak terhubung ke backend'}
-      </div>
-
-      {/* Stat Cards */}
-      <div className="stat-grid">
-        <StatCard label="Suhu" value={sensorData?.temperature?.toFixed(1)} unit="°C" icon={<Thermometer size={20}/>} color="#ef4444" />
-        <StatCard label="Kelembaban" value={sensorData?.humidity?.toFixed(1)} unit="%" icon={<Droplets size={20}/>} color="#3b82f6" />
-        <StatCard label="Siklus" value={sensorData ? `${cycleCurrent}/${cycleTotal}` : '--'} unit="" icon={<RotateCcw size={20}/>} color="#10b981" />
-        <StatCard
-          label={isSlicingPhase ? 'Siklus Berjalan' : 'Progress'}
-          value={isSlicingPhase ? `${cycleCurrent}/${cycleTotal || '-'}` : (sensorData?.progress ?? 0)}
-          unit={isSlicingPhase ? '' : '%'}
-          icon={<Cpu size={20}/>} color="#f59e0b" />
-      </div>
-
-      {/* Status Komponen — read-only, kontrol manual ada di halaman Pemotong/Pengering */}
-      <div className="card">
-        <div className="card-title">Status Komponen</div>
-        <div className="component-grid">
-          <ComponentStatus icon={<Flame size={20}/>} label="Heater" desc="Elemen pemanas" on={actuators.heater} />
-          <ComponentStatus icon={<Scissors size={20}/>} label="Pemotong" desc="Pisau iris otomatis" on={actuators.pemotong} />
-          <ComponentStatus icon={<ArrowRightLeft size={20}/>} label="Pendorong" desc="Motor pendorong bahan" on={actuators.pendorong} />
-        </div>
-        <p className="dashboard-hint">Untuk kontrol manual per-komponen, buka halaman <b>Pemotong</b> atau <b>Pengering</b>.</p>
-      </div>
-
-      {/* Progress Bar */}
-      <div className="card">
-        <div className="card-title">{isSlicingPhase ? 'Progress Pemotongan' : 'Progress Pengeringan'}</div>
-        {isSlicingPhase ? (
-          <>
-            <div className="progress-bar-bg">
-              <div
-                className="progress-bar-fill"
-                style={{ width: cycleTotal ? `${Math.min(100, (cycleCurrent / cycleTotal) * 100)}%` : '0%', background: stateColor }}
-              />
+      <div className="dash-grid">
+        {/* Hero status — signature element halaman ini: ring status besar + gradient warna state */}
+        <div className="dash-hero" style={{ background: `linear-gradient(135deg, ${stateColor} 0%, #1e2a4a 130%)` }}>
+          <div className="dash-hero-ring">
+            {isDrying || isSlicingPhase ? <span className="dash-hero-pulse" /> : null}
+            <div className="dash-hero-ring-inner">
+              <Cpu size={26} color="#fff" />
             </div>
-            <div className="progress-labels">
-              <span>Siklus 0</span>
-              <span style={{ color: stateColor, fontWeight: 600 }}>{cycleCurrent}/{cycleTotal || '-'}</span>
-              <span>Siklus {cycleTotal || '-'}</span>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="progress-bar-bg">
-              <div className="progress-bar-fill" style={{ width: `${sensorData?.progress ?? 0}%`, background: stateColor }} />
-            </div>
-            <div className="progress-labels">
-              <span>0%</span>
-              <span style={{ color: stateColor, fontWeight: 600 }}>{sensorData?.progress ?? 0}%</span>
-              <span>100%</span>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Chart Suhu */}
-      <div className="card">
-        <div className="card-title">Grafik Suhu</div>
-        {chartData.length === 0
-          ? <div className="chart-empty">Menunggu data dari sensor...</div>
-          : <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={chartData}>
-                <XAxis dataKey="time" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} domain={[40, 90]} />
-                <Tooltip />
-                <Line type="monotone" dataKey="temp" name="Suhu (°C)" stroke="#ef4444" dot={false} strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
-        }
-      </div>
-
-      {/* Chart Kelembaban */}
-      <div className="card">
-        <div className="card-title">Grafik Kelembaban</div>
-        {chartData.length === 0
-          ? <div className="chart-empty">Menunggu data dari sensor...</div>
-          : <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={chartData}>
-                <XAxis dataKey="time" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} domain={[0, 100]} />
-                <Tooltip />
-                <Line type="monotone" dataKey="hum" name="Kelembaban (%)" stroke="#3b82f6" dot={false} strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
-        }
-      </div>
-
-      {/* Aksi Darurat Global — START/STOP/RESET tetap di sini biar operator bisa
-          langsung hentikan mesin dari halaman manapun tanpa navigasi.
-          Panel pengaturan JUMLAH SIKLUS dipindah sepenuhnya ke halaman Pemotong,
-          supaya cuma ada 1 tempat buat setting itu (hindari duplikasi/salah setting). */}
-      <div className="card">
-        <div className="card-title">Aksi Mesin (Darurat / Global)</div>
-        <div className="control-row">
-          <button className="btn btn-green"  disabled={cmdLoading} onClick={() => sendCmd('START')}>▶ Mulai (pakai siklus terakhir)</button>
-          <button className="btn btn-red"    disabled={cmdLoading} onClick={() => sendCmd('STOP')}>⏹ Hentikan</button>
-          <button className="btn btn-yellow" disabled={cmdLoading} onClick={() => sendCmd('RESET')}>↺ Reset Sistem</button>
+          </div>
+          <div className="dash-hero-body">
+            <div className="dash-hero-eyebrow">Status Sistem</div>
+            <div className="dash-hero-state">{effectiveState || 'IDLE'}</div>
+            <div className="dash-hero-desc">{STATE_LABEL[effectiveState] || 'Menunggu data dari mesin...'}</div>
+            {isSlicingPhase && (
+              <div className="dash-hero-foot"><span>Siklus {cycleCurrent}/{cycleTotal || '-'}</span></div>
+            )}
+            {isDrying && (
+              <div className="dash-hero-foot"><span>{progressPct.toFixed(0)}% dari estimasi waktu</span></div>
+            )}
+          </div>
+          <button className="dash-hero-stop" disabled={cmdLoading} onClick={doEmergencyStop}>⏹ Stop Darurat</button>
         </div>
-        <p className="dashboard-hint">Untuk mengatur jumlah siklus pemotongan, buka halaman <b>Pemotong</b>.</p>
-      </div>
 
-      {/* Log Aktivitas */}
-      <div className="card">
-        <div className="card-title">Log Aktivitas</div>
-        {activityLog.length === 0
-          ? <div className="empty">Belum ada aktivitas pada sesi ini</div>
-          : <div className="alert-list">
-              {activityLog.map(item => (
-                <div key={item.id} className="alert-item">
-                  <div className="alert-meta">
-                    <span className={`badge badge-${item.type === 'error' ? 'error' : item.type === 'success' ? 'finished' : item.type === 'warning' ? 'wifi-lost' : 'stopped'}`}>
-                      {item.type === 'error' ? 'Error' : item.type === 'success' ? 'Selesai' : item.type === 'warning' ? 'Peringatan' : 'Info'}
-                    </span>
-                    <span className="alert-time">
+        {/* Kesehatan sistem — info device, gak ditampilkan di halaman lain */}
+        <div className="dash-health">
+          <div className="dash-health-title"><Wifi size={14} /> Kesehatan Sistem</div>
+          {heartbeat ? (
+            <>
+              <div className="dash-health-row"><span>Firmware</span><b>{heartbeat.firmware}</b></div>
+              <div className="dash-health-row"><span>Chip</span><b>{heartbeat.chip}</b></div>
+              <div className="dash-health-row"><span>WiFi RSSI</span><b>{heartbeat.wifi_rssi} dBm</b></div>
+              <div className="dash-health-row"><span>Heap Free</span><b>{heartbeat.heap_free} B</b></div>
+              <div className="dash-health-row"><span>Uptime</span><b>{Math.floor((heartbeat.uptime||0)/60)} menit</b></div>
+              <div className="dash-health-row">
+                <span>Nano</span>
+                <b style={{ color: heartbeat.nano === 'online' ? '#10b981' : '#ef4444' }}>{heartbeat.nano}</b>
+              </div>
+            </>
+          ) : <p className="dashboard-hint">Menunggu heartbeat dari ESP32...</p>}
+        </div>
+
+        {/* Akses Cepat — baris chip tanpa bingkai card, sengaja beda dari style card di halaman lain */}
+        <div className="dash-shortcuts-row">
+          <ShortcutChip icon={<ArrowRightLeft size={16} />} title="Pemotong"
+            desc={isSlicingPhase ? `Aktif · siklus ${cycleCurrent}/${cycleTotal || '-'}` : 'Siap dipakai'}
+            onClick={() => onNavigate?.('pemotong')} />
+          <ShortcutChip icon={<Flame size={16} />} title="Pengering"
+            desc={isDrying ? `Berjalan · ${progressPct.toFixed(0)}%` : 'Siap dipakai'}
+            onClick={() => onNavigate?.('pengering')} />
+          <ShortcutChip icon={<SettingsIcon size={16} />} title="Pengaturan"
+            desc={settings ? `${settings.target_temp_min}–${settings.target_temp_max}°C` : 'Atur setpoint'}
+            onClick={() => onNavigate?.('settings')} />
+          <ShortcutChip icon={<HistoryIcon size={16} />} title="Riwayat"
+            desc={`${sessions.length} sesi`}
+            onClick={() => onNavigate?.('history')} />
+          <ShortcutChip icon={<Bell size={16} />} title="Alert"
+            desc={unreadAlerts > 0 ? `${unreadAlerts} belum dibaca` : 'Aman'}
+            badge={unreadAlerts > 0 ? unreadAlerts : null}
+            onClick={() => onNavigate?.('alerts')} />
+        </div>
+
+        {/* Ringkasan Hari Ini — bento tile angka besar, beda dari list icon+label di halaman lain */}
+        <div className="dash-summary">
+          <div className="dash-panel-title"><ListChecks size={14} /> Ringkasan Hari Ini</div>
+          <div className="dash-summary-tiles">
+            <div className="dash-tile">
+              <div className="dash-tile-value">{todaySummary.count}</div>
+              <div className="dash-tile-label">Total Sesi</div>
+            </div>
+            <div className="dash-tile">
+              <div className="dash-tile-value">{todaySummary.totalCycles}</div>
+              <div className="dash-tile-label">Siklus Selesai</div>
+            </div>
+            <div className="dash-tile">
+              <div className="dash-tile-value">{fmtDuration(todaySummary.totalDurSec)}</div>
+              <div className="dash-tile-label">Total Durasi</div>
+            </div>
+            <div className="dash-tile">
+              <div className="dash-tile-value accent-green">{todaySummary.finished}</div>
+              <div className="dash-tile-label">Selesai Normal</div>
+            </div>
+            <div className="dash-tile">
+              <div className="dash-tile-value accent-blue">{todaySummary.earlyStopped}</div>
+              <div className="dash-tile-label">Lebih Cepat</div>
+            </div>
+            <div className="dash-tile">
+              <div className="dash-tile-value accent-red">{todaySummary.errored}</div>
+              <div className="dash-tile-label">Error</div>
+            </div>
+          </div>
+          {todaySummary.count === 0 && <p className="dashboard-hint">Belum ada sesi yang berjalan hari ini.</p>}
+        </div>
+
+        {/* Log Aktivitas — timeline vertikal, beda dari .alert-list flat di halaman Alert */}
+        <div className="dash-activity">
+          <div className="dash-panel-title"><Clock size={14} /> Log Aktivitas</div>
+          {activityLog.length === 0
+            ? <p className="dashboard-hint">Belum ada aktivitas pada sesi ini.</p>
+            : <div className="dash-timeline">
+                {activityLog.map(item => (
+                  <div key={item.id} className="dash-timeline-item">
+                    <span className="dash-timeline-dot" style={{ background: dotColor[item.type] }} />
+                    <div className="dash-timeline-time">
                       {new Date(item.ts).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                    </span>
+                    </div>
+                    <div className="dash-timeline-msg">{item.message}</div>
                   </div>
-                  <div className="alert-msg">{item.message}</div>
-                </div>
-              ))}
-            </div>
-        }
-      </div>
-
-      {/* Heartbeat Info */}
-      {heartbeat && (
-        <div className="card info-grid">
-          <div className="info-item"><span>Firmware</span><b>{heartbeat.firmware}</b></div>
-          <div className="info-item"><span>Chip</span><b>{heartbeat.chip}</b></div>
-          <div className="info-item"><span>WiFi RSSI</span><b>{heartbeat.wifi_rssi} dBm</b></div>
-          <div className="info-item"><span>Heap Free</span><b>{heartbeat.heap_free} B</b></div>
-          <div className="info-item"><span>Uptime</span><b>{Math.floor((heartbeat.uptime||0)/60)} menit</b></div>
-          <div className="info-item"><span>Nano</span><b style={{color: heartbeat.nano==='online'?'#10b981':'#ef4444'}}>{heartbeat.nano}</b></div>
+                ))}
+              </div>
+          }
         </div>
-      )}
+      </div>
     </div>
   )
 }
 
-function ComponentStatus({ icon, label, desc, on }) {
+function ShortcutChip({ icon, title, desc, badge, onClick }) {
   return (
-    <div className="component-card">
-      <div className={`component-icon ${on ? 'component-icon-on' : ''}`}>{icon}</div>
-      <div className="component-label">{label}</div>
-      <div className="component-desc">{desc}</div>
-      <div className={`component-state ${on ? 'component-state-on' : 'component-state-off'}`}>
-        <span className="status-dot" />
-        {on ? 'ON' : 'OFF'}
-      </div>
-    </div>
+    <button className="dash-chip" onClick={onClick} type="button">
+      <span className="dash-chip-icon">{icon}</span>
+      <span className="dash-chip-text">
+        <span className="dash-chip-title">{title}</span>
+        <span className="dash-chip-desc">{desc}</span>
+      </span>
+      {badge ? <span className="shortcut-badge">{badge}</span> : null}
+    </button>
   )
 }

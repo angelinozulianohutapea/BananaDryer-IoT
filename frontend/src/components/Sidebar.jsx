@@ -14,7 +14,7 @@ export default function Sidebar({ page, setPage }) {
     <aside className="sidebar">
       <div className="sidebar-logo">
         <span className="logo-icon">🍌</span>
-        <span className="logo-text">BananaDryer</span>
+        <span className="logo-text">Smart Banana System</span>
       </div>
       <nav className="sidebar-nav">
         {nav.map(({ id, label, icon: Icon }) => (

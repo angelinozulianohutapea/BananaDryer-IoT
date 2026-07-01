@@ -37,7 +37,7 @@ body { background: var(--bg); color: var(--text); }
   margin-bottom: 16px;
 }
 .logo-icon { font-size: 24px; }
-.logo-text  { font-size: 15px; font-weight: 700; color: var(--yellow); letter-spacing: .5px; }
+.logo-text  { font-size: 13px; font-weight: 700; color: var(--yellow); letter-spacing: .3px; line-height: 1.25; }
 
 .sidebar-nav { display: flex; flex-direction: column; gap: 4px; }
 
@@ -365,6 +365,194 @@ body { background: var(--bg); color: var(--text); }
 .btn-toggle-off:not(:disabled):hover { background: #ef44441a; }
 .manual-disabled-hint { font-size: 11px; color: var(--muted); margin-top: 8px; font-style: italic; }
 .manual-warning { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.dashboard-hint { font-size: 12px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
+
+/* ══════════════════════════════════════════════════════════════
+   Dashboard — layout bento, SENGAJA beda dari pola .page-header +
+   tumpukan .card yang dipakai Pemotong/Pengering/Settings/dll.
+   ══════════════════════════════════════════════════════════════ */
+
+.dash-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.dash-topbar-title { font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: .2px; }
+.dash-topbar-conn {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+}
+.dash-topbar-conn.is-ok  { color: #0d9468; background: #10b9811a; }
+.dash-topbar-conn.is-err { color: #dc2626; background: #ef44441a; }
+.dash-topbar-conn .status-dot { width: 6px; height: 6px; }
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 16px;
+}
+
+/* Hero status — signature element: ring besar + gradient warna sesuai state */
+.dash-hero {
+  grid-column: span 8;
+  border-radius: 18px;
+  padding: 22px 24px;
+  display: flex; align-items: center; gap: 20px;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.dash-hero-ring {
+  width: 76px; height: 76px; border-radius: 50%;
+  border: 3px solid rgba(255,255,255,.35);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; position: relative;
+}
+.dash-hero-ring-inner {
+  width: 54px; height: 54px; border-radius: 50%;
+  background: rgba(255,255,255,.18);
+  display: flex; align-items: center; justify-content: center;
+}
+.dash-hero-pulse {
+  position: absolute; inset: -4px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.55);
+  animation: dashPulse 1.8s ease-out infinite;
+}
+@keyframes dashPulse {
+  0%   { transform: scale(.85); opacity: .9; }
+  100% { transform: scale(1.45); opacity: 0; }
+}
+.dash-hero-body { flex: 1; min-width: 0; }
+.dash-hero-eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; opacity: .8; }
+.dash-hero-state { font-size: 24px; font-weight: 800; margin-top: 2px; }
+.dash-hero-desc { font-size: 13px; opacity: .9; margin-top: 6px; max-width: 440px; }
+.dash-hero-foot { display: flex; gap: 16px; margin-top: 10px; font-size: 12px; opacity: .9; font-weight: 600; }
+.dash-hero-stop {
+  flex-shrink: 0; background: #fff; color: #dc2626; border: none;
+  font-weight: 700; font-size: 13px; padding: 10px 18px; border-radius: 10px;
+  cursor: pointer; white-space: nowrap; transition: all .15s;
+}
+.dash-hero-stop:hover:not(:disabled) { background: #fee2e2; }
+.dash-hero-stop:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Kesehatan sistem — panel ramping di samping hero */
+.dash-health {
+  grid-column: span 4;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+  padding: 18px 20px; display: flex; flex-direction: column; gap: 9px;
+}
+.dash-health-title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px;
+}
+.dash-health-row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
+.dash-health-row b { color: var(--text); font-weight: 600; }
+
+/* Akses Cepat — baris chip tanpa bingkai card */
+.dash-shortcuts-row {
+  grid-column: span 12;
+  display: flex; flex-wrap: wrap; gap: 10px;
+}
+.dash-chip {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 10px 14px; cursor: pointer; flex: 1 1 190px; max-width: 260px;
+  transition: all .15s; text-align: left;
+}
+.dash-chip:hover { border-color: var(--yellow); background: #f59e0b0d; transform: translateY(-1px); }
+.dash-chip-icon {
+  width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: #f59e0b1a; color: var(--yellow);
+}
+.dash-chip-text { display: flex; flex-direction: column; min-width: 0; }
+.dash-chip-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.dash-chip-desc { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Ringkasan Hari Ini — bento tile angka besar */
+.dash-summary {
+  grid-column: span 7;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+  padding: 20px;
+}
+.dash-panel-title {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 14px;
+}
+.dash-summary-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.dash-tile { background: var(--bg); border-radius: 12px; padding: 14px 10px; text-align: center; }
+.dash-tile-value { font-size: 24px; font-weight: 800; color: var(--text); line-height: 1.1; }
+.dash-tile-value.accent-green { color: var(--green); }
+.dash-tile-value.accent-blue  { color: var(--blue); }
+.dash-tile-value.accent-red   { color: var(--red); }
+.dash-tile-label { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+/* Log Aktivitas — timeline vertikal, beda dari .alert-list di halaman Alert */
+.dash-activity {
+  grid-column: span 5;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+  padding: 20px;
+}
+.dash-timeline { max-height: 300px; overflow-y: auto; padding-left: 2px; }
+.dash-timeline-item {
+  position: relative; padding-left: 18px; padding-bottom: 14px;
+  border-left: 2px solid var(--border); margin-left: 4px;
+}
+.dash-timeline-item:last-child { border-left-color: transparent; padding-bottom: 0; }
+.dash-timeline-dot {
+  position: absolute; left: -5px; top: 3px; width: 8px; height: 8px;
+  border-radius: 50%; border: 2px solid var(--surface);
+}
+.dash-timeline-time { font-size: 11px; color: var(--muted); }
+.dash-timeline-msg { font-size: 13px; color: var(--text); margin-top: 2px; line-height: 1.4; }
+
+@media (max-width: 900px) {
+  .dash-hero, .dash-health, .dash-summary, .dash-activity, .dash-shortcuts-row { grid-column: span 12; }
+}
+@media (max-width: 480px) {
+  .dash-hero { flex-wrap: wrap; }
+  .dash-summary-tiles { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── Dashboard: Akses Cepat (shortcut cards) ── */
+.shortcut-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;
+}
+.shortcut-card {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px; cursor: pointer; text-align: left; width: 100%;
+  transition: all .15s;
+}
+.shortcut-card:hover { border-color: var(--yellow); background: #f59e0b0d; transform: translateY(-1px); }
+.shortcut-icon {
+  width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: #f59e0b1a; color: var(--yellow);
+}
+.shortcut-body { flex: 1; min-width: 0; }
+.shortcut-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.shortcut-desc { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shortcut-chevron { color: var(--muted); flex-shrink: 0; }
+.shortcut-badge {
+  background: var(--red); color: #fff; font-size: 11px; font-weight: 700;
+  border-radius: 999px; padding: 2px 8px; flex-shrink: 0;
+}
+
+/* ── Dashboard: Ringkasan Hari Ini ── */
+.summary-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px;
+}
+.summary-item {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--muted);
+  background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px;
+}
+.summary-item b { margin-left: auto; font-size: 15px; color: var(--text); }
+.summary-item svg { color: var(--yellow); flex-shrink: 0; }
+.summary-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 
 /* ── Speedometer row ── */
 .speedometer-row { display: flex; justify-content: center; gap: 40px; flex-wrap: wrap; }

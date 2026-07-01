@@ -14,7 +14,7 @@ export default function App() {
     <div className="app-layout">
       <Sidebar page={page} setPage={setPage} />
       <main className="main-content">
-        {page === 'dashboard' && <Dashboard />}
+        {page === 'dashboard' && <Dashboard onNavigate={setPage} />}
         {page === 'pemotong'  && <Pemotong />}
         {page === 'pengering' && <Pengering />}
         {page === 'settings'  && <Settings />}
