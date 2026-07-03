@@ -1,10 +1,22 @@
 import { useState, useEffect } from 'react'
-import { Scissors, ArrowRightLeft, RotateCcw } from 'lucide-react'
+import { Scissors, ArrowRightLeft, RotateCcw, Image as ImageIcon } from 'lucide-react'
 import useSocket from '../hooks/useSocket'
 import { sendCommand, controlPusher, controlCutter } from '../hooks/api'
 import Speedometer from '../components/Speedometer'
 import ManualControl from '../components/ManualControl'
 import DualLineChart from '../components/DualLineChart'
+
+import fotoKiri from '../assets/pemotong/PendorongPemotongKiri.jpeg'
+import fotoDepan from '../assets/pemotong/PendorongPemotongDepan.jpeg'
+import fotoAtas from '../assets/pemotong/PendorongPemotongAtas.jpeg'
+import fotoKanan from '../assets/pemotong/PendorongPemotongKanan.jpeg'
+
+const DOKUMENTASI_FOTO_PEMOTONG = [
+  { src: fotoKiri, label: 'Tampak Kiri' },
+  { src: fotoDepan, label: 'Tampak Depan' },
+  { src: fotoAtas, label: 'Tampak Atas' },
+  { src: fotoKanan, label: 'Tampak Kanan' },
+]
 
 const CYCLE_PRESETS = [5, 10, 15, 20]
 
@@ -96,6 +108,19 @@ export default function Pemotong() {
 
       <div className={`conn-bar ${connected ? 'conn-ok' : 'conn-err'}`}>
         {connected ? '🟢 Socket.IO terhubung — data realtime aktif' : '🔴 Tidak terhubung ke backend'}
+      </div>
+
+      {/* Foto Dokumentasi Pemotong */}
+      <div className="card">
+        <div className="card-title"><ImageIcon size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />Foto Dokumentasi Pemotong</div>
+        <div className="photo-grid">
+          {DOKUMENTASI_FOTO_PEMOTONG.map((foto, i) => (
+            <div className="photo-slot has-photo" key={i}>
+              <img src={foto.src} alt={foto.label} />
+              <span className="photo-slot-label">{foto.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Ilustrasi mesin */}

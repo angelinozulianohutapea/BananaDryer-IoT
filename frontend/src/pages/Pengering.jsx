@@ -5,6 +5,18 @@ import { sendCommand, controlHeater, getSettings } from '../hooks/api'
 import ManualControl from '../components/ManualControl'
 import ChartWithIdealBand from '../components/ChartWithIdealBand'
 
+import fotoKiri from '../assets/pengering/PengeringKiri.jpeg'
+import fotoDepan from '../assets/pengering/PengeringDepan.jpeg'
+import fotoAtas from '../assets/pengering/PengeringAtas.jpeg'
+import fotoKanan from '../assets/pengering/PengeringKanan.jpeg'
+
+const DOKUMENTASI_FOTO_PENGERING = [
+  { src: fotoKiri, label: 'Tampak Kiri' },
+  { src: fotoDepan, label: 'Tampak Depan' },
+  { src: fotoAtas, label: 'Tampak Atas' },
+  { src: fotoKanan, label: 'Tampak Kanan' },
+]
+
 const STATE_COLOR = {
   IDLE: '#6b7280', DRYING: '#f59e0b', FINISHED: '#10b981', ERROR: '#ef4444', OFFLINE: '#ef4444',
 }
@@ -171,16 +183,14 @@ export default function Pengering() {
         </div>
       )}
 
-      {/* Dokumentasi Mesin — 4 slot foto berdampingan.
-          Tinggal ganti isi tiap .photo-slot dengan <img src="..." alt="..." /> untuk
-          menampilkan foto asli mesin pengering di sini. */}
+      {/* Dokumentasi Mesin — 4 foto tampak Kiri/Depan/Atas/Kanan */}
       <div className="card">
-        <div className="card-title">Dokumentasi Mesin Pengering</div>
+        <div className="card-title"><ImageIcon size={14} style={{ verticalAlign: 'middle', marginRight: 6 }} />Dokumentasi Mesin Pengering</div>
         <div className="photo-grid">
-          {[1, 2, 3, 4].map(i => (
-            <div className="photo-slot" key={i}>
-              <ImageIcon size={22} strokeWidth={1.5} />
-              <span>Foto {i}</span>
+          {DOKUMENTASI_FOTO_PENGERING.map((foto, i) => (
+            <div className="photo-slot has-photo" key={i}>
+              <img src={foto.src} alt={foto.label} />
+              <span className="photo-slot-label">{foto.label}</span>
             </div>
           ))}
         </div>

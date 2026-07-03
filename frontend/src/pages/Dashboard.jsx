@@ -6,6 +6,18 @@ import {
 import useSocket from '../hooks/useSocket'
 import { sendCommand, getSessions, getSettings, getAlerts } from '../hooks/api'
 
+import fotoKiri from '../assets/SeluruhDariKiri.jpeg'
+import fotoDepan from '../assets/SeluruhDariDepan.jpeg'
+import fotoAtas from '../assets/SeluruhDariAtas.jpeg'
+import fotoKanan from '../assets/SeluruhDariKanan.jpeg'
+
+const DOKUMENTASI_FOTO = [
+  { src: fotoKiri, label: 'Tampak Kiri' },
+  { src: fotoDepan, label: 'Tampak Depan' },
+  { src: fotoAtas, label: 'Tampak Atas' },
+  { src: fotoKanan, label: 'Tampak Kanan' },
+]
+
 function fmtDuration(sec) {
   if (sec === null || sec === undefined) return '-'
   const h = Math.floor(sec / 3600)
@@ -258,15 +270,14 @@ export default function Dashboard({ onNavigate }) {
           }
         </div>
 
-        {/* Foto Dokumentasi Mesin — slot 4 kolom, konsisten sama Pemotong & Pengering.
-            Tinggal ganti isi tiap .photo-slot dengan <img src="..." alt="..." /> */}
+        {/* Foto Dokumentasi Mesin — slot 4 kolom, konsisten sama Pemotong & Pengering. */}
         <div className="dash-photos">
           <div className="dash-panel-title"><ImageIcon size={14} /> Foto Dokumentasi Mesin</div>
           <div className="photo-grid">
-            {[1, 2, 3, 4].map(i => (
+            {DOKUMENTASI_FOTO.map((foto, i) => (
               <div className="photo-slot" key={i}>
-                <ImageIcon size={22} strokeWidth={1.5} />
-                <span>Foto {i}</span>
+                <img src={foto.src} alt={foto.label} />
+                <span className="photo-slot-label">{foto.label}</span>
               </div>
             ))}
           </div>
