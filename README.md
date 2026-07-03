@@ -1,9 +1,10 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=12,20,26&height=220&section=header&text=BananaDryer-IoT&fontSize=52&fontColor=FFD93D&animation=fadeIn&fontAlignY=38&desc=Smart%20Banana%20Slicing%20%26%20Drying%20System&descAlignY=58&descSize=18" width="100%"/>
+# 🍌 BananaDryer-IoT
+
+### Smart Banana Slicing & Drying System
 
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=20&duration=2600&pause=900&color=F5A623&center=true&vCenter=true&width=650&lines=IoT+Pemotong+%26+Pengering+Pisang+Otomatis;Arduino+Nano+%2B+ESP32+%2B+MQTT+%2B+React+Dashboard;Proyek+Akhir+D3+Teknologi+Komputer+%E2%80%94+Institut+Teknologi+Del" alt="Typing SVG" />
-
 <br/>
 
 [![Made with Love](https://img.shields.io/badge/Made%20with-%F0%9F%8D%8C%20%26%20%E2%9D%A4%EF%B8%8F-f59e0b?style=for-the-badge)](#)
@@ -49,6 +50,7 @@
 - [Tentang Proyek](#-tentang-proyek)
 - [Fitur Utama](#-fitur-utama)
 - [Tampilan Sistem](#-tampilan-sistem)
+- [Tampilan Halaman Aplikasi](#-tampilan-halaman-aplikasi)
 - [Dokumentasi Perangkat Keras](#-dokumentasi-perangkat-keras)
 - [Arsitektur Sistem](#-arsitektur-sistem)
 - [Alur Data (Data Flow)](#-alur-data-data-flow)
@@ -135,6 +137,45 @@
 <td align="center" width="25%"><img src="frontend/src/assets/SeluruhDariDepan.jpeg" width="100%"/><br/><sub><b>Tampak Depan</b></sub></td>
 <td align="center" width="25%"><img src="frontend/src/assets/SeluruhDariAtas.jpeg" width="100%"/><br/><sub><b>Tampak Atas</b></sub></td>
 <td align="center" width="25%"><img src="frontend/src/assets/SeluruhDariKanan.jpeg" width="100%"/><br/><sub><b>Tampak Kanan</b></sub></td>
+</tr>
+</table>
+
+</div>
+
+<br/>
+
+## 📸 Tampilan Halaman Aplikasi
+
+<div align="center">
+
+<table>
+<tr>
+<td align="center" width="33%">
+<img src="frontend/src/assets/screenshots/dashboard.png" width="100%"/>
+<br/><b>Dashboard</b>
+</td>
+<td align="center" width="33%">
+<img src="frontend/src/assets/screenshots/pemotong.png" width="100%"/>
+<br/><b>Pemotong</b>
+</td>
+<td align="center" width="33%">
+<img src="frontend/src/assets/screenshots/pengering.png" width="100%"/>
+<br/><b>Pengering</b>
+</td>
+</tr>
+<tr>
+<td align="center" width="33%">
+<img src="frontend/src/assets/screenshots/pengaturan.png" width="100%"/>
+<br/><b>Pengaturan</b>
+</td>
+<td align="center" width="33%">
+<img src="frontend/src/assets/screenshots/riwayat.png" width="100%"/>
+<br/><b>Riwayat</b>
+</td>
+<td align="center" width="33%">
+<img src="frontend/src/assets/screenshots/alert.png" width="100%"/>
+<br/><b>Alert</b>
+</td>
 </tr>
 </table>
 
@@ -599,6 +640,6 @@ Proyek ini dibuat untuk keperluan akademik (Proyek Akhir) di Institut Teknologi 
 
 ### ⭐ Kalau proyek ini membantu, jangan lupa kasih bintang!
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=12,20,26&height=120&section=footer" width="100%"/>
+🍌 **BananaDryer-IoT** — Institut Teknologi Del
 
 </div>
