@@ -607,10 +607,6 @@ VITE_BACKEND_URL=http://localhost:3000
 - [x] Backend REST API + Socket.IO real-time
 - [x] Dashboard React (Dashboard, Pemotong, Pengering, Settings, History, Alerts)
 - [x] Migrasi tampilan ke light theme
-- [ ] Aplikasi Android (native companion app)
-- [ ] Notifikasi push / WhatsApp saat sesi selesai
-- [ ] Multi-machine support dalam satu dashboard
-- [ ] Export laporan sesi ke PDF/Excel
 
 <br/>
 
